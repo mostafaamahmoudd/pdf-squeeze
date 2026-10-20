@@ -46,6 +46,8 @@ pdf-squeeze report.pdf -t 20 -o smaller.pdf
 
 Without `-o`, the output is `<input_stem>_squeezed.pdf` beside the input. The CLI prints the final size and DPI. An unreachable target produces a warning, saves the 50 DPI result, and exits successfully. Invalid inputs, bad target values, missing Ghostscript, and Ghostscript failures exit with an error.
 
+PDF Squeeze will not replace an existing output file. Choose a new output path if the suggested name already exists.
+
 ## Tests
 
 ```sh

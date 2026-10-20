@@ -1,5 +1,5 @@
 use crate::gs;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -128,6 +128,12 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
     if output == input || fs::canonicalize(output).is_ok_and(|path| path == input) {
         bail!("Output path must differ from the input PDF");
     }
+    if fs::symlink_metadata(output).is_ok() {
+        bail!(
+            "Output '{}' already exists. Choose a different output path",
+            output.display()
+        );
+    }
     let output_dir = output
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -140,22 +146,33 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
     })?;
     gs::check_installed()?;
 
+    let mut attempts = Vec::<(u32, tempfile::TempPath)>::new();
     let result = find_best_dpi(target_bytes, |dpi| {
-        let trial = trials.path().join(format!("{dpi}.pdf"));
+        let trial = tempfile::Builder::new()
+            .suffix(".pdf")
+            .tempfile_in(trials.path())
+            .context("Could not create a temporary PDF")?
+            .into_temp_path();
         gs::run(&input, &trial, dpi)?;
-        fs::metadata(&trial)
-            .map(|metadata| metadata.len())
+        let size = fs::metadata(&trial)
             .with_context(|| {
                 format!(
                     "Ghostscript did not create '{}': check the input PDF",
                     trial.display()
                 )
-            })
+            })?
+            .len();
+        attempts.push((dpi, trial));
+        Ok(size)
     })?;
-    let winner = trials.path().join(format!("{}.pdf", result.dpi));
-    fs::rename(&winner, output).with_context(|| {
+    let winner_index = attempts
+        .iter()
+        .position(|(dpi, _)| *dpi == result.dpi)
+        .ok_or_else(|| anyhow!("Selected PDF was not found"))?;
+    let winner = attempts.swap_remove(winner_index).1;
+    winner.persist_noclobber(output).with_context(|| {
         format!(
-            "Could not save '{}': check that the output folder is writable",
+            "Could not save '{}': it may already exist, or the output folder may not be writable",
             output.display()
         )
     })?;
@@ -223,5 +240,19 @@ mod tests {
             "/tests/fixtures/tiny.pdf"
         ));
         validate_input(input).unwrap();
+    }
+
+    #[test]
+    fn never_replaces_an_existing_output() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("existing.pdf");
+        std::fs::write(&output, b"keep this").unwrap();
+        let input = Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/tiny.pdf"
+        ));
+        let error = compress_pdf(input, &output, 1.0).unwrap_err().to_string();
+        assert!(error.contains("already exists"), "{error}");
+        assert_eq!(std::fs::read(output).unwrap(), b"keep this");
     }
 }
