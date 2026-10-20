@@ -20,6 +20,7 @@ pub fn run() -> Result<()> {
 }
 
 struct PdfSqueezeApp {
+    dark_mode: bool,
     input: Option<PathBuf>,
     output: String,
     progress: f32,
@@ -38,8 +39,8 @@ enum Status {
 
 impl PdfSqueezeApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_theme(egui::ThemePreference::Light);
-        Self {
+        let app = Self {
+            dark_mode: false,
             input: None,
             output: String::new(),
             progress: 0.0,
@@ -47,7 +48,13 @@ impl PdfSqueezeApp {
             worker: None,
             pending_result: None,
             status: Status::Ready,
-        }
+        };
+        cc.egui_ctx.set_theme(if app.dark_mode {
+            egui::ThemePreference::Dark
+        } else {
+            egui::ThemePreference::Light
+        });
+        app
     }
 
     fn start_compression(&mut self) {
@@ -123,6 +130,23 @@ impl PdfSqueezeApp {
 impl eframe::App for PdfSqueezeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_worker();
+        egui::TopBottomPanel::top("theme_controls").show(ctx, |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let label = if self.dark_mode {
+                    "☀️ Light"
+                } else {
+                    "🌙 Dark"
+                };
+                if ui.button(label).clicked() {
+                    self.dark_mode = !self.dark_mode;
+                    ctx.set_theme(if self.dark_mode {
+                        egui::ThemePreference::Dark
+                    } else {
+                        egui::ThemePreference::Light
+                    });
+                }
+            });
+        });
         egui::CentralPanel::default().show(ctx, |ui| {
             let idle = self.worker.is_none() && self.pending_result.is_none();
             ui.heading("PDF Squeeze");
