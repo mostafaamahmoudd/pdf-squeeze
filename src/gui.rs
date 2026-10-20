@@ -190,11 +190,18 @@ impl eframe::App for PdfSqueezeApp {
                     });
                     ctx.request_repaint_after(Duration::from_millis(100));
                 }
+                Status::Success(summary, path, _) if summary.dpi.is_none() => {
+                    ui.label(format!(
+                        "This PDF already fits the target. Saved the original ({}), unchanged, to {}.",
+                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
+                        path.display()
+                    ));
+                }
                 Status::Success(summary, path, _) if summary.met_target => {
                     ui.label(format!(
                         "Saved {} at {} DPI to {}",
                         compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
-                        summary.dpi,
+                        summary.dpi.unwrap_or_default(),
                         path.display()
                     ));
                 }

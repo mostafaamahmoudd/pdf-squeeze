@@ -14,18 +14,26 @@ pub fn format_mb(mb: f64) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SearchResult {
-    pub dpi: u32,
+    pub dpi: Option<u32>,
     pub size_bytes: u64,
     pub met_target: bool,
 }
 
 pub fn find_best_dpi(
     target_bytes: u64,
+    original_size: u64,
     mut size_at_dpi: impl FnMut(u32) -> Result<u64>,
 ) -> Result<SearchResult> {
+    if original_size <= target_bytes {
+        return Ok(SearchResult {
+            dpi: None,
+            size_bytes: original_size,
+            met_target: true,
+        });
+    }
     let min_size = size_at_dpi(MIN_DPI)?;
     let mut best = SearchResult {
-        dpi: MIN_DPI,
+        dpi: Some(MIN_DPI),
         size_bytes: min_size,
         met_target: min_size <= target_bytes,
     };
@@ -36,7 +44,7 @@ pub fn find_best_dpi(
     let max_size = size_at_dpi(MAX_DPI)?;
     if max_size <= target_bytes {
         return Ok(SearchResult {
-            dpi: MAX_DPI,
+            dpi: Some(MAX_DPI),
             size_bytes: max_size,
             met_target: true,
         });
@@ -50,7 +58,7 @@ pub fn find_best_dpi(
         if size <= target_bytes {
             lo = dpi;
             best = SearchResult {
-                dpi,
+                dpi: Some(dpi),
                 size_bytes: size,
                 met_target: true,
             };
@@ -125,6 +133,14 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
             input.display()
         )
     })?;
+    let original_size = fs::metadata(&input)
+        .with_context(|| {
+            format!(
+                "Could not read input size '{}': check the file",
+                input.display()
+            )
+        })?
+        .len();
     if output == input || fs::canonicalize(output).is_ok_and(|path| path == input) {
         bail!("Output path must differ from the input PDF");
     }
@@ -147,7 +163,7 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
     gs::check_installed()?;
 
     let mut attempts = Vec::<(u32, tempfile::TempPath)>::new();
-    let result = find_best_dpi(target_bytes, |dpi| {
+    let result = find_best_dpi(target_bytes, original_size, |dpi| {
         let trial = tempfile::Builder::new()
             .suffix(".pdf")
             .tempfile_in(trials.path())
@@ -165,11 +181,29 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
         attempts.push((dpi, trial));
         Ok(size)
     })?;
-    let winner_index = attempts
-        .iter()
-        .position(|(dpi, _)| *dpi == result.dpi)
-        .ok_or_else(|| anyhow!("Selected PDF was not found"))?;
-    let winner = attempts.swap_remove(winner_index).1;
+    let winner = if let Some(dpi) = result.dpi {
+        let winner_index = attempts
+            .iter()
+            .position(|(attempt_dpi, _)| *attempt_dpi == dpi)
+            .ok_or_else(|| anyhow!("Selected PDF was not found"))?;
+        attempts.swap_remove(winner_index).1
+    } else {
+        let original = tempfile::Builder::new()
+            .suffix(".pdf")
+            .tempfile_in(trials.path())
+            .context("Could not create a temporary PDF")?
+            .into_temp_path();
+        let copied = fs::copy(&input, &original).with_context(|| {
+            format!(
+                "Could not copy input PDF '{}': check the file",
+                input.display()
+            )
+        })?;
+        if copied != original_size {
+            bail!("Input PDF changed during compression. Please try again");
+        }
+        original
+    };
     winner.persist_noclobber(output).with_context(|| {
         format!(
             "Could not save '{}': it may already exist, or the output folder may not be writable",
@@ -186,36 +220,50 @@ mod tests {
     #[test]
     fn returns_minimum_attempt_when_target_is_unreachable() {
         let mut tried = Vec::new();
-        let result = find_best_dpi(100, |dpi| {
+        let result = find_best_dpi(100, 300, |dpi| {
             tried.push(dpi);
             Ok(200)
         })
         .unwrap();
         assert_eq!(tried, [50]);
-        assert_eq!(result.dpi, 50);
+        assert_eq!(result.dpi, Some(50));
         assert_eq!(result.size_bytes, 200);
         assert!(!result.met_target);
     }
 
     #[test]
     fn chooses_300_when_it_fits() {
-        let result = find_best_dpi(300, |dpi| Ok(u64::from(dpi))).unwrap();
-        assert_eq!(result.dpi, 300);
+        let result = find_best_dpi(300, 400, |dpi| Ok(u64::from(dpi))).unwrap();
+        assert_eq!(result.dpi, Some(300));
         assert!(result.met_target);
     }
 
     #[test]
     fn finds_largest_fitting_dpi_within_five_dpi() {
-        let result = find_best_dpi(200, |dpi| Ok(u64::from(dpi))).unwrap();
-        assert!((195..=200).contains(&result.dpi));
-        assert_eq!(result.size_bytes, u64::from(result.dpi));
+        let result = find_best_dpi(200, 400, |dpi| Ok(u64::from(dpi))).unwrap();
+        assert!((195..=200).contains(&result.dpi.unwrap()));
+        assert_eq!(result.size_bytes, u64::from(result.dpi.unwrap()));
         assert!(result.met_target);
     }
 
     #[test]
     fn propagates_sizing_errors() {
-        let result = find_best_dpi(100, |_| anyhow::bail!("sizing failed"));
+        let result = find_best_dpi(100, 300, |_| anyhow::bail!("sizing failed"));
         assert!(result.unwrap_err().to_string().contains("sizing failed"));
+    }
+
+    #[test]
+    fn preserves_original_when_it_already_fits() {
+        let mut tried = false;
+        let result = find_best_dpi(1_000, 346, |_| {
+            tried = true;
+            Ok(2_398)
+        })
+        .unwrap();
+        assert!(!tried);
+        assert_eq!(result.dpi, None);
+        assert_eq!(result.size_bytes, 346);
+        assert!(result.met_target);
     }
 
     #[test]
