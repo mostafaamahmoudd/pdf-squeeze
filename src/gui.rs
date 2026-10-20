@@ -11,7 +11,7 @@ pub fn run() -> Result<()> {
     eframe::run_native(
         "PDF Squeeze",
         eframe::NativeOptions::default(),
-        Box::new(|_| Ok(Box::new(PdfSqueezeApp::new()))),
+        Box::new(|cc| Ok(Box::new(PdfSqueezeApp::new(cc)))),
     )
     .map_err(|error| anyhow!("{error}"))
 }
@@ -33,7 +33,8 @@ enum Status {
 }
 
 impl PdfSqueezeApp {
-    fn new() -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        cc.egui_ctx.set_theme(egui::ThemePreference::Light);
         Self {
             input: None,
             output: String::new(),
