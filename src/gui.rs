@@ -101,6 +101,7 @@ impl eframe::App for PdfSqueezeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_worker();
         egui::CentralPanel::default().show(ctx, |ui| {
+            let idle = self.worker.is_none();
             ui.heading("PDF Squeeze");
             ui.add_space(12.0);
 
@@ -117,10 +118,10 @@ impl eframe::App for PdfSqueezeApp {
                     .map(|path| path.to_string_lossy().into_owned())
                     .unwrap_or_default();
                 ui.add_sized(
-                    [ui.available_width() - 90.0, 24.0],
+                    [(ui.available_width() - 90.0).max(80.0), 24.0],
                     egui::TextEdit::singleline(&mut display).interactive(false),
                 );
-                if ui.button("Browse").clicked() {
+                if ui.add_enabled(idle, egui::Button::new("Browse")).clicked() {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("PDF", &["pdf"])
                         .pick_file()
@@ -137,17 +138,20 @@ impl eframe::App for PdfSqueezeApp {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 ui.label("Target size (MB)");
-                ui.add(egui::DragValue::new(&mut self.target_mb).range(0.001..=100_000.0));
+                ui.add_enabled(
+                    idle,
+                    egui::DragValue::new(&mut self.target_mb).range(0.001..=100_000.0),
+                );
             });
 
             ui.add_space(8.0);
             ui.label("Output path");
             ui.horizontal(|ui| {
                 ui.add_sized(
-                    [ui.available_width() - 90.0, 24.0],
-                    egui::TextEdit::singleline(&mut self.output),
+                    [(ui.available_width() - 90.0).max(80.0), 24.0],
+                    egui::TextEdit::singleline(&mut self.output).interactive(idle),
                 );
-                if ui.button("Browse").clicked() {
+                if ui.add_enabled(idle, egui::Button::new("Browse")).clicked() {
                     let dialog = rfd::FileDialog::new()
                         .add_filter("PDF", &["pdf"])
                         .set_file_name(
