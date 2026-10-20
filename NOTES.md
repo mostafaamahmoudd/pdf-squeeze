@@ -1,8 +1,12 @@
 # Compression notes
 
-`find_best_dpi` preserves the original if it already fits. Otherwise, it measures the 50 DPI result first. If it is above the target, that is the selected fallback. Otherwise, it measures 300 DPI. If 300 DPI fits, it wins. Between those bounds, binary search keeps the largest measured DPI that fits and stops when the bounds differ by at most 5 DPI. The decision function accepts a size-producing closure, so unit tests need no PDFs or Ghostscript. Ghostscript output size can vary non-monotonically with DPI, so the search is an approximation to the highest fitting quality.
+The target-size search was removed because the tool now optimizes for a small output at acceptable quality, rather than a user-specified size budget. The 72 DPI floor aims to keep text in raster content readable; below that, many pages become unusable. Vector text is not controlled by image DPI.
 
-Each attempt is written inside a temporary directory in the output folder. The selected PDF is moved to the requested path only after the search finishes, and only if that path does not already exist. Dropping the temporary directory removes all other attempts, including after an error. The tool compares file sizes with `metadata().len()` and does not parse PDF content; it checks only the `%PDF-` header before starting Ghostscript.
+`find_best_dpi` measures 72 and 300 DPI, then halves the interval while its bounds differ by more than 5 DPI. It compares each midpoint with the current lower-bound sample to choose a half, and retains the smallest output measured at any step. Its size-producing closure keeps the decision logic testable without PDFs or Ghostscript. Ghostscript output size can be non-monotonic, so this heuristic does not prove a global minimum.
+
+After the search, the tool compares the smallest Ghostscript output with the original input. It saves the Ghostscript result only when that result is strictly smaller. Otherwise, it copies the original unchanged: some PDFs are already optimized, and Ghostscript can enlarge them. Both outcomes provide a usable output file.
+
+Each attempt is written inside a temporary directory in the output folder. The selected PDF or unchanged input copy is moved to the requested path only after the search finishes, and only if that path does not already exist. Dropping the temporary directory removes all other attempts, including after an error. The tool compares file sizes with `metadata().len()` and does not parse PDF content; it checks only the `%PDF-` header before starting Ghostscript. The GUI receives a progress update after each Ghostscript invocation. Its progress bar uses an eight-step estimate, so one step may take a while on a large file.
 
 Every Ghostscript invocation uses:
 
