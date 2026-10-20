@@ -1,7 +1,7 @@
 use crate::gs;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 pub const MIN_DPI: u32 = 72;
@@ -118,6 +118,60 @@ pub fn default_output_path(input: &Path) -> std::path::PathBuf {
     input.with_file_name(name)
 }
 
+fn validate_candidate(path: &Path) -> Result<u64> {
+    let mut file = fs::File::open(path).context("Could not open the candidate PDF")?;
+    let metadata = file
+        .metadata()
+        .context("Could not inspect the candidate PDF")?;
+    if !metadata.is_file() || metadata.len() == 0 {
+        bail!("Candidate PDF is empty or is not a regular file");
+    }
+
+    let mut header = [0_u8; 8];
+    file.read_exact(&mut header)
+        .context("Candidate PDF has a missing or truncated header")?;
+    if &header[..5] != b"%PDF-"
+        || !header[5].is_ascii_digit()
+        || header[6] != b'.'
+        || !header[7].is_ascii_digit()
+    {
+        bail!("Candidate PDF has an invalid header");
+    }
+
+    // Cheap checks for missing/truncated output, not a full PDF parser.
+    // Ghostscript's strict error mode and diagnostics guard input corruption;
+    // these checks guard the candidate before it can win on file size.
+    let tail_len = metadata.len().min(1024) as usize;
+    file.seek(SeekFrom::End(-(tail_len as i64)))?;
+    let mut tail = vec![0; tail_len];
+    file.read_exact(&mut tail)?;
+    let tail = tail.trim_ascii_end();
+    let trailer = tail
+        .strip_suffix(b"%%EOF")
+        .context("Candidate PDF is missing its EOF marker")?;
+    let marker = trailer
+        .windows(b"startxref".len())
+        .rposition(|bytes| bytes == b"startxref")
+        .context("Candidate PDF is missing its cross-reference trailer")?;
+    let offset = std::str::from_utf8(&trailer[marker + b"startxref".len()..])?
+        .trim()
+        .parse::<u64>()
+        .context("Candidate PDF has an invalid cross-reference offset")?;
+    if offset < header.len() as u64 || offset >= metadata.len() {
+        bail!("Candidate PDF cross-reference offset is outside the file");
+    }
+    // Conversion explicitly requests PDF 1.4, which uses a cross-reference
+    // table rather than a PDF 1.5 cross-reference stream.
+    file.seek(SeekFrom::Start(offset))?;
+    let mut xref = [0_u8; 5];
+    file.read_exact(&mut xref)
+        .context("Candidate PDF has a truncated cross-reference table")?;
+    if &xref[..4] != b"xref" || !xref[4].is_ascii_whitespace() {
+        bail!("Candidate PDF cross-reference offset does not point to a table");
+    }
+    Ok(metadata.len())
+}
+
 pub fn compress_pdf(
     input: &Path,
     output: &Path,
@@ -173,15 +227,13 @@ pub fn compress_pdf(
             current_step,
             total_steps: ESTIMATED_TOTAL_STEPS,
         });
-        invocation?;
-        let size = fs::metadata(&trial)
-            .with_context(|| {
-                format!(
-                    "Ghostscript did not create '{}': check the input PDF",
-                    trial.display()
-                )
-            })?
-            .len();
+        let invocation = invocation?;
+        let size = validate_candidate(&trial).with_context(|| {
+            format!(
+                "Ghostscript produced invalid PDF output at {dpi} DPI. {}",
+                gs::diagnostics(&invocation)
+            )
+        })?;
         attempts.push((dpi, trial));
         Ok(size)
     })?;
