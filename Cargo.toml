@@ -1,0 +1,14 @@
+[package]
+name = "pdf-squeeze"
+version = "0.1.0"
+edition = "2021"
+description = "Compress PDFs to a target size using Ghostscript"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+eframe = "0.31"
+egui = "0.31"
+rfd = "0.15"
+tempfile = "3"
