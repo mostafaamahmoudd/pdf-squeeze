@@ -35,18 +35,7 @@ fn run_cli() -> Result<()> {
         .output
         .unwrap_or_else(|| compress::default_output_path(&cli.input));
     let result = compress::compress_pdf(&cli.input, &output, |_| {})?;
-    match result.dpi {
-        Some(dpi) => println!(
-            "Compressed from {} to {} at {dpi} DPI. Saved to {}.",
-            compress::format_mb(result.original_size_bytes as f64 / 1_000_000.0),
-            compress::format_mb(result.size_bytes as f64 / 1_000_000.0),
-            output.display()
-        ),
-        None => println!(
-            "This file is already as small as it can get without quality loss. Original kept. Saved unchanged to {}.",
-            output.display()
-        ),
-    }
+    println!("{}\nSaved to {}.", result.summary(), output.display());
     Ok(())
 }
 

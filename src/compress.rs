@@ -1,17 +1,27 @@
 use crate::gs;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
-
-pub const MIN_DPI: u32 = 72;
-pub const MAX_DPI: u32 = 300;
-pub const ESTIMATED_TOTAL_STEPS: usize = 8;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProgressUpdate {
-    pub current_step: usize,
-    pub total_steps: usize,
+pub enum CompressionStage {
+    CheckingGhostscript,
+    Compressing,
+    ValidatingOutput,
+    Saving,
+}
+
+impl CompressionStage {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CheckingGhostscript => "Checking Ghostscript…",
+            Self::Compressing => "Compressing your PDF…",
+            Self::ValidatingOutput => "Checking the compressed PDF…",
+            Self::Saving => "Saving output…",
+        }
+    }
 }
 
 pub fn format_mb(mb: f64) -> String {
@@ -20,53 +30,47 @@ pub fn format_mb(mb: f64) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SearchResult {
-    pub dpi: Option<u32>,
-    pub size_bytes: u64,
-    pub original_size_bytes: u64,
+pub enum CompressionOutcome {
+    Compressed,
+    Unchanged,
 }
 
-pub fn find_best_dpi(
-    original_size: u64,
-    mut size_at_dpi: impl FnMut(u32) -> Result<u64>,
-) -> Result<SearchResult> {
-    let min_size = size_at_dpi(MIN_DPI)?;
-    let max_size = size_at_dpi(MAX_DPI)?;
-    let (mut best_dpi, mut best_size) = if max_size < min_size {
-        (MAX_DPI, max_size)
-    } else {
-        (MIN_DPI, min_size)
-    };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompressionResult {
+    pub size_bytes: u64,
+    pub original_size_bytes: u64,
+    pub elapsed: Duration,
+    pub compression_invocations: usize,
+    pub profile: gs::CompressionProfile,
+    pub outcome: CompressionOutcome,
+}
 
-    let mut lo = MIN_DPI;
-    let mut lo_size = min_size;
-    let mut hi = MAX_DPI;
-    while hi - lo > 5 {
-        let dpi = lo + (hi - lo) / 2;
-        let size = size_at_dpi(dpi)?;
-        if size < best_size {
-            best_dpi = dpi;
-            best_size = size;
+impl CompressionResult {
+    pub fn saved_percent(&self) -> f64 {
+        if self.original_size_bytes == 0 {
+            return 0.0;
         }
-        if size < lo_size {
-            lo = dpi;
-            lo_size = size;
-        } else {
-            hi = dpi;
-        }
+        self.original_size_bytes.saturating_sub(self.size_bytes) as f64
+            / self.original_size_bytes as f64
+            * 100.0
     }
-    if best_size < original_size {
-        Ok(SearchResult {
-            dpi: Some(best_dpi),
-            size_bytes: best_size,
-            original_size_bytes: original_size,
-        })
-    } else {
-        Ok(SearchResult {
-            dpi: None,
-            size_bytes: original_size,
-            original_size_bytes: original_size,
-        })
+
+    pub fn summary(&self) -> String {
+        let outcome = match self.outcome {
+            CompressionOutcome::Compressed => "Compressed from",
+            CompressionOutcome::Unchanged => {
+                "No smaller valid result with this profile. Original kept. Saved an unchanged copy:"
+            }
+        };
+        format!(
+            "{outcome} {} to {} ({:.1}% saved).\nProfile: {}; elapsed: {:.2} s; compression passes: {}.",
+            format_mb(self.original_size_bytes as f64 / 1_000_000.0),
+            format_mb(self.size_bytes as f64 / 1_000_000.0),
+            self.saved_percent(),
+            self.profile.name(),
+            self.elapsed.as_secs_f64(),
+            self.compression_invocations,
+        )
     }
 }
 
@@ -175,8 +179,10 @@ fn validate_candidate(path: &Path) -> Result<u64> {
 pub fn compress_pdf(
     input: &Path,
     output: &Path,
-    mut on_progress: impl FnMut(ProgressUpdate),
-) -> Result<SearchResult> {
+    mut on_progress: impl FnMut(CompressionStage),
+) -> Result<CompressionResult> {
+    let started = Instant::now();
+    let profile = gs::CompressionProfile::default();
     validate_input(input)?;
     let input = fs::canonicalize(input).with_context(|| {
         format!(
@@ -211,45 +217,32 @@ pub fn compress_pdf(
             output_dir.display()
         )
     })?;
+    on_progress(CompressionStage::CheckingGhostscript);
     gs::check_installed()?;
 
-    let mut attempts = Vec::<(u32, tempfile::TempPath)>::new();
-    let mut current_step = 0;
-    let result = find_best_dpi(original_size, |dpi| {
-        let trial = tempfile::Builder::new()
-            .suffix(".pdf")
-            .tempfile_in(trials.path())
-            .context("Could not create a temporary PDF")?
-            .into_temp_path();
-        let invocation = gs::run(&input, &trial, dpi);
-        current_step += 1;
-        on_progress(ProgressUpdate {
-            current_step,
-            total_steps: ESTIMATED_TOTAL_STEPS,
-        });
-        let invocation = invocation?;
-        let size = validate_candidate(&trial).with_context(|| {
-            format!(
-                "Ghostscript produced invalid PDF output at {dpi} DPI. {}",
-                gs::diagnostics(&invocation)
-            )
-        })?;
-        attempts.push((dpi, trial));
-        Ok(size)
+    let trial = tempfile::Builder::new()
+        .suffix(".pdf")
+        .tempfile_in(trials.path())
+        .context("Could not create a temporary PDF")?
+        .into_temp_path();
+    on_progress(CompressionStage::Compressing);
+    let invocation = gs::run(&input, &trial, profile)?;
+    on_progress(CompressionStage::ValidatingOutput);
+    let candidate_size = validate_candidate(&trial).with_context(|| {
+        format!(
+            "Ghostscript produced invalid PDF output using {}. {}",
+            profile.name(),
+            gs::diagnostics(&invocation)
+        )
     })?;
-    let winner = if let Some(dpi) = result.dpi {
-        let winner_index = attempts
-            .iter()
-            .position(|(attempt_dpi, _)| *attempt_dpi == dpi)
-            .ok_or_else(|| anyhow!("Selected PDF was not found"))?;
-        attempts.swap_remove(winner_index).1
+
+    on_progress(CompressionStage::Saving);
+    let (size_bytes, outcome) = if candidate_size < original_size {
+        (candidate_size, CompressionOutcome::Compressed)
     } else {
-        let original = tempfile::Builder::new()
-            .suffix(".pdf")
-            .tempfile_in(trials.path())
-            .context("Could not create a temporary PDF")?
-            .into_temp_path();
-        let copied = fs::copy(&input, &original).with_context(|| {
+        // Reuse the private candidate path. Only the unchanged-copy outcome
+        // needs a full-file copy; a smaller candidate is published directly.
+        let copied = fs::copy(&input, &trial).with_context(|| {
             format!(
                 "Could not copy input PDF '{}': check the file",
                 input.display()
@@ -258,15 +251,22 @@ pub fn compress_pdf(
         if copied != original_size {
             bail!("Input PDF changed during compression. Please try again");
         }
-        original
+        (original_size, CompressionOutcome::Unchanged)
     };
-    winner.persist_noclobber(output).with_context(|| {
+    trial.persist_noclobber(output).with_context(|| {
         format!(
             "Could not save '{}': it may already exist, or the output folder may not be writable",
             output.display()
         )
     })?;
-    Ok(result)
+    Ok(CompressionResult {
+        size_bytes,
+        original_size_bytes: original_size,
+        elapsed: started.elapsed(),
+        compression_invocations: 1,
+        profile,
+        outcome,
+    })
 }
 
 #[cfg(test)]
@@ -274,64 +274,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keeps_smallest_output_seen_during_search() {
-        let mut tried = Vec::new();
-        let result = find_best_dpi(10_000, |dpi| {
-            let size = if dpi == 186 {
-                800
-            } else {
-                1_000 + u64::from(dpi)
+    fn reports_percentage_saved_from_the_published_sizes() {
+        for (original_size_bytes, size_bytes, expected) in
+            [(1_000, 250, 75.0), (1_000, 1_000, 0.0), (0, 0, 0.0)]
+        {
+            let result = CompressionResult {
+                original_size_bytes,
+                size_bytes,
+                elapsed: Duration::ZERO,
+                compression_invocations: 1,
+                profile: gs::CompressionProfile::Ebook,
+                outcome: CompressionOutcome::Compressed,
             };
-            tried.push((dpi, size));
-            Ok(size)
-        })
-        .unwrap();
-        assert_eq!(result.dpi, Some(186));
-        assert_eq!(result.size_bytes, 800);
-        assert_eq!(
-            result.size_bytes,
-            tried.iter().map(|(_, size)| *size).min().unwrap()
-        );
-    }
-
-    #[test]
-    fn considers_300_dpi_when_it_is_smallest() {
-        let result = find_best_dpi(10_000, |dpi| Ok(5_000 - u64::from(dpi))).unwrap();
-        assert_eq!(result.dpi, Some(300));
-        assert_eq!(result.size_bytes, 4_700);
-    }
-
-    #[test]
-    fn never_samples_below_72_dpi() {
-        let mut tried = Vec::new();
-        let result = find_best_dpi(10_000, |dpi| {
-            tried.push(dpi);
-            Ok(u64::from(dpi))
-        })
-        .unwrap();
-        assert!(tried.contains(&72));
-        assert!(tried.iter().all(|dpi| (72..=300).contains(dpi)));
-        assert!(tried.len() <= 8);
-        assert_eq!(result.dpi, Some(72));
-    }
-
-    #[test]
-    fn propagates_sizing_errors() {
-        let result = find_best_dpi(300, |_| anyhow::bail!("sizing failed"));
-        assert!(result.unwrap_err().to_string().contains("sizing failed"));
-    }
-
-    #[test]
-    fn keeps_original_when_every_compressed_result_is_larger() {
-        let mut tried = Vec::new();
-        let result = find_best_dpi(346, |dpi| {
-            tried.push(dpi);
-            Ok(2_398)
-        })
-        .unwrap();
-        assert!(!tried.is_empty());
-        assert_eq!(result.dpi, None);
-        assert_eq!(result.size_bytes, 346);
+            assert_eq!(result.saved_percent(), expected);
+        }
     }
 
     #[test]

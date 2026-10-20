@@ -4,9 +4,9 @@ use eframe::egui;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-type WorkerResult = Result<(compress::SearchResult, PathBuf), String>;
+type WorkerResult = Result<(compress::CompressionResult, PathBuf), String>;
 enum WorkerMessage {
-    Progress(compress::ProgressUpdate),
+    Progress(compress::CompressionStage),
     Finished(WorkerResult),
 }
 
@@ -23,7 +23,7 @@ struct PdfSqueezeApp {
     dark_mode: bool,
     input: Option<PathBuf>,
     output: String,
-    progress: f32,
+    stage: compress::CompressionStage,
     ghostscript_error: Option<String>,
     worker: Option<Receiver<WorkerMessage>>,
     pending_result: Option<WorkerResult>,
@@ -33,7 +33,7 @@ struct PdfSqueezeApp {
 enum Status {
     Ready,
     Running,
-    Success(compress::SearchResult, PathBuf),
+    Success(compress::CompressionResult, PathBuf),
     Failure(String),
 }
 
@@ -43,7 +43,7 @@ impl PdfSqueezeApp {
             dark_mode: false,
             input: None,
             output: String::new(),
-            progress: 0.0,
+            stage: compress::CompressionStage::CheckingGhostscript,
             ghostscript_error: gs::check_installed().err().map(|error| error.to_string()),
             worker: None,
             pending_result: None,
@@ -68,7 +68,7 @@ impl PdfSqueezeApp {
         }
         let output = PathBuf::from(&self.output);
         let (sender, receiver) = mpsc::channel();
-        self.progress = 0.0;
+        self.stage = compress::CompressionStage::CheckingGhostscript;
         match std::thread::Builder::new()
             .name("pdf-squeeze-compression".into())
             .spawn(move || {
@@ -93,7 +93,6 @@ impl PdfSqueezeApp {
 
     fn poll_worker(&mut self) {
         if let Some(result) = self.pending_result.take() {
-            self.progress = 0.0;
             self.status = match result {
                 Ok((summary, output)) => Status::Success(summary, output),
                 Err(error) => Status::Failure(error),
@@ -105,16 +104,14 @@ impl PdfSqueezeApp {
             let message = self.worker.as_ref().map(Receiver::try_recv);
             match message {
                 Some(Ok(WorkerMessage::Progress(update))) => {
-                    self.progress = update.current_step as f32 / update.total_steps as f32;
+                    self.stage = update;
                 }
                 Some(Ok(WorkerMessage::Finished(result))) => {
-                    self.progress = 1.0;
                     self.pending_result = Some(result);
                     self.worker = None;
                     break;
                 }
                 Some(Err(TryRecvError::Disconnected)) => {
-                    self.progress = 1.0;
                     self.pending_result = Some(Err(
                         "Compression stopped unexpectedly. Please try again.".into(),
                     ));
@@ -183,7 +180,7 @@ impl eframe::App for PdfSqueezeApp {
             });
 
             ui.add_space(8.0);
-            ui.label("Compresses to the smallest file with acceptable quality (72 DPI floor).");
+            ui.label("One-pass compression with the /ebook profile. Image quality may change.");
 
             ui.add_space(8.0);
             ui.label("Output path");
@@ -227,25 +224,14 @@ impl eframe::App for PdfSqueezeApp {
             match &self.status {
                 Status::Ready => {}
                 Status::Running => {
-                    ui.label("Compressing your PDF…");
-                    ui.add(
-                        egui::ProgressBar::new(self.progress.clamp(0.0, 1.0))
-                            .show_percentage()
-                            .animate(true),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(self.stage.label());
+                    });
                     ctx.request_repaint();
                 }
-                Status::Success(summary, path) if summary.dpi.is_none() => {
-                    ui.label("This file is already as small as it can get without quality loss. Original kept.");
-                    ui.label(format!("Saved an unchanged copy to {}", path.display()));
-                }
                 Status::Success(summary, path) => {
-                    ui.label(format!(
-                        "Compressed from {} to {} at {} DPI.",
-                        compress::format_mb(summary.original_size_bytes as f64 / 1_000_000.0),
-                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
-                        summary.dpi.unwrap_or_default(),
-                    ));
+                    ui.label(summary.summary());
                     ui.label(format!("Saved to {}", path.display()));
                 }
                 Status::Failure(error) => {
@@ -253,5 +239,61 @@ impl eframe::App for PdfSqueezeApp {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    #[ignore = "requires Ghostscript installed"]
+    fn gui_worker_uses_the_shared_single_pass_engine() {
+        let directory = tempfile::tempdir().unwrap();
+        let input = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/tiny.pdf"
+        ));
+        let original = std::fs::read(&input).unwrap();
+        let output = directory.path().join("output.pdf");
+        let mut app = PdfSqueezeApp {
+            dark_mode: false,
+            input: Some(input.clone()),
+            output: output.to_string_lossy().into_owned(),
+            stage: compress::CompressionStage::CheckingGhostscript,
+            ghostscript_error: None,
+            worker: None,
+            pending_result: None,
+            status: Status::Ready,
+        };
+
+        app.start_compression();
+        assert!(matches!(app.status, Status::Running));
+        assert!(app.worker.is_some());
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            app.poll_worker();
+            match &app.status {
+                Status::Success(summary, path) => {
+                    assert_eq!(path, &output);
+                    assert_eq!(summary.original_size_bytes, original.len() as u64);
+                    assert_eq!(summary.size_bytes, original.len() as u64);
+                    assert_eq!(summary.outcome, compress::CompressionOutcome::Unchanged);
+                    assert_eq!(summary.profile, gs::CompressionProfile::Ebook);
+                    assert_eq!(summary.compression_invocations, 1);
+                    assert_eq!(summary.saved_percent(), 0.0);
+                    assert_eq!(std::fs::read(&output).unwrap(), original);
+                    assert_eq!(std::fs::read(&input).unwrap(), original);
+                    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+                    break;
+                }
+                Status::Failure(error) => panic!("GUI worker failed: {error}"),
+                _ => {
+                    assert!(Instant::now() < deadline, "GUI worker did not finish");
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
     }
 }
