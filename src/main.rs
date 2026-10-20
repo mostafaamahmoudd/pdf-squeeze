@@ -40,17 +40,17 @@ fn run_cli() -> Result<()> {
         .output
         .unwrap_or_else(|| compress::default_output_path(&cli.input));
     let result = compress::compress_pdf(&cli.input, &output, cli.target_mb)?;
-    let size_mb = result.size_bytes as f64 / 1_000_000.0;
+    let size = compress::format_mb(result.size_bytes as f64 / 1_000_000.0);
     if result.met_target {
         println!(
-            "Compressed to {size_mb:.2} MB at {} DPI. Saved to {}.",
+            "Compressed to {size} at {} DPI. Saved to {}.",
             result.dpi,
             output.display()
         );
     } else {
         eprintln!(
-            "Warning: the 50 DPI result is {size_mb:.2} MB, above the {:.2} MB target. The smallest result was saved to {}.",
-            cli.target_mb,
+            "Warning: the 50 DPI result is {size}, above the {} target. The smallest result was saved to {}.",
+            compress::format_mb(cli.target_mb),
             output.display()
         );
     }

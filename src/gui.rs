@@ -192,17 +192,17 @@ impl eframe::App for PdfSqueezeApp {
                 }
                 Status::Success(summary, path, _) if summary.met_target => {
                     ui.label(format!(
-                        "Saved {:.2} MB at {} DPI to {}",
-                        summary.size_bytes as f64 / 1_000_000.0,
+                        "Saved {} at {} DPI to {}",
+                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
                         summary.dpi,
                         path.display()
                     ));
                 }
                 Status::Success(summary, path, requested_target) => {
                     ui.label(format!(
-                        "This PDF could not reach the {:.2} MB target without severe quality loss. The smallest result ({:.2} MB) was saved to {}.",
-                        requested_target,
-                        summary.size_bytes as f64 / 1_000_000.0,
+                        "This PDF could not reach the {} target without severe quality loss. The smallest result ({}) was saved to {}.",
+                        compress::format_mb(*requested_target),
+                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
                         path.display()
                     ));
                 }

@@ -6,6 +6,11 @@ use std::path::Path;
 pub const MIN_DPI: u32 = 50;
 pub const MAX_DPI: u32 = 300;
 
+pub fn format_mb(mb: f64) -> String {
+    let precision = if mb < 0.01 { 6 } else { 2 };
+    format!("{mb:.precision$} MB")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SearchResult {
     pub dpi: u32,
@@ -174,5 +179,11 @@ mod tests {
     fn propagates_sizing_errors() {
         let result = find_best_dpi(100, |_| anyhow::bail!("sizing failed"));
         assert!(result.unwrap_err().to_string().contains("sizing failed"));
+    }
+
+    #[test]
+    fn displays_small_megabyte_values_without_rounding_to_zero() {
+        assert_eq!(format_mb(0.000001), "0.000001 MB");
+        assert_eq!(format_mb(12.345), "12.35 MB");
     }
 }
