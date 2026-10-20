@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-pub const MIN_DPI: u32 = 50;
+pub const MIN_DPI: u32 = 72;
 pub const MAX_DPI: u32 = 300;
 pub const ESTIMATED_TOTAL_STEPS: usize = 8;
 
@@ -23,57 +23,51 @@ pub fn format_mb(mb: f64) -> String {
 pub struct SearchResult {
     pub dpi: Option<u32>,
     pub size_bytes: u64,
-    pub met_target: bool,
+    pub original_size_bytes: u64,
 }
 
 pub fn find_best_dpi(
-    target_bytes: u64,
     original_size: u64,
     mut size_at_dpi: impl FnMut(u32) -> Result<u64>,
 ) -> Result<SearchResult> {
-    if original_size <= target_bytes {
-        return Ok(SearchResult {
-            dpi: None,
-            size_bytes: original_size,
-            met_target: true,
-        });
-    }
     let min_size = size_at_dpi(MIN_DPI)?;
-    let mut best = SearchResult {
-        dpi: Some(MIN_DPI),
-        size_bytes: min_size,
-        met_target: min_size <= target_bytes,
-    };
-    if !best.met_target {
-        return Ok(best);
-    }
-
     let max_size = size_at_dpi(MAX_DPI)?;
-    if max_size <= target_bytes {
-        return Ok(SearchResult {
-            dpi: Some(MAX_DPI),
-            size_bytes: max_size,
-            met_target: true,
-        });
-    }
+    let (mut best_dpi, mut best_size) = if max_size < min_size {
+        (MAX_DPI, max_size)
+    } else {
+        (MIN_DPI, min_size)
+    };
 
     let mut lo = MIN_DPI;
+    let mut lo_size = min_size;
     let mut hi = MAX_DPI;
     while hi - lo > 5 {
         let dpi = lo + (hi - lo) / 2;
         let size = size_at_dpi(dpi)?;
-        if size <= target_bytes {
+        if size < best_size {
+            best_dpi = dpi;
+            best_size = size;
+        }
+        if size < lo_size {
             lo = dpi;
-            best = SearchResult {
-                dpi: Some(dpi),
-                size_bytes: size,
-                met_target: true,
-            };
+            lo_size = size;
         } else {
             hi = dpi;
         }
     }
-    Ok(best)
+    if best_size < original_size {
+        Ok(SearchResult {
+            dpi: Some(best_dpi),
+            size_bytes: best_size,
+            original_size_bytes: original_size,
+        })
+    } else {
+        Ok(SearchResult {
+            dpi: None,
+            size_bytes: original_size,
+            original_size_bytes: original_size,
+        })
+    }
 }
 
 pub fn validate_input(input: &Path) -> Result<()> {
@@ -127,18 +121,9 @@ pub fn default_output_path(input: &Path) -> std::path::PathBuf {
 pub fn compress_pdf(
     input: &Path,
     output: &Path,
-    target_mb: f64,
     mut on_progress: impl FnMut(ProgressUpdate),
 ) -> Result<SearchResult> {
     validate_input(input)?;
-    if !target_mb.is_finite() || target_mb <= 0.0 || target_mb > (u64::MAX as f64) / 1_000_000.0 {
-        bail!("Target size must be a positive number of MB");
-    }
-    let target_bytes = (target_mb * 1_000_000.0).floor() as u64;
-    if target_bytes == 0 {
-        bail!("Target size must be at least one byte");
-    }
-
     let input = fs::canonicalize(input).with_context(|| {
         format!(
             "Could not resolve input '{}': check the path",
@@ -176,7 +161,7 @@ pub fn compress_pdf(
 
     let mut attempts = Vec::<(u32, tempfile::TempPath)>::new();
     let mut current_step = 0;
-    let result = find_best_dpi(target_bytes, original_size, |dpi| {
+    let result = find_best_dpi(original_size, |dpi| {
         let trial = tempfile::Builder::new()
             .suffix(".pdf")
             .tempfile_in(trials.path())
@@ -237,52 +222,64 @@ mod tests {
     use super::*;
 
     #[test]
-    fn returns_minimum_attempt_when_target_is_unreachable() {
+    fn keeps_smallest_output_seen_during_search() {
         let mut tried = Vec::new();
-        let result = find_best_dpi(100, 300, |dpi| {
-            tried.push(dpi);
-            Ok(200)
+        let result = find_best_dpi(10_000, |dpi| {
+            let size = if dpi == 186 {
+                800
+            } else {
+                1_000 + u64::from(dpi)
+            };
+            tried.push((dpi, size));
+            Ok(size)
         })
         .unwrap();
-        assert_eq!(tried, [50]);
-        assert_eq!(result.dpi, Some(50));
-        assert_eq!(result.size_bytes, 200);
-        assert!(!result.met_target);
+        assert_eq!(result.dpi, Some(186));
+        assert_eq!(result.size_bytes, 800);
+        assert_eq!(
+            result.size_bytes,
+            tried.iter().map(|(_, size)| *size).min().unwrap()
+        );
     }
 
     #[test]
-    fn chooses_300_when_it_fits() {
-        let result = find_best_dpi(300, 400, |dpi| Ok(u64::from(dpi))).unwrap();
+    fn considers_300_dpi_when_it_is_smallest() {
+        let result = find_best_dpi(10_000, |dpi| Ok(5_000 - u64::from(dpi))).unwrap();
         assert_eq!(result.dpi, Some(300));
-        assert!(result.met_target);
+        assert_eq!(result.size_bytes, 4_700);
     }
 
     #[test]
-    fn finds_largest_fitting_dpi_within_five_dpi() {
-        let result = find_best_dpi(200, 400, |dpi| Ok(u64::from(dpi))).unwrap();
-        assert!((195..=200).contains(&result.dpi.unwrap()));
-        assert_eq!(result.size_bytes, u64::from(result.dpi.unwrap()));
-        assert!(result.met_target);
+    fn never_samples_below_72_dpi() {
+        let mut tried = Vec::new();
+        let result = find_best_dpi(10_000, |dpi| {
+            tried.push(dpi);
+            Ok(u64::from(dpi))
+        })
+        .unwrap();
+        assert!(tried.contains(&72));
+        assert!(tried.iter().all(|dpi| (72..=300).contains(dpi)));
+        assert!(tried.len() <= 8);
+        assert_eq!(result.dpi, Some(72));
     }
 
     #[test]
     fn propagates_sizing_errors() {
-        let result = find_best_dpi(100, 300, |_| anyhow::bail!("sizing failed"));
+        let result = find_best_dpi(300, |_| anyhow::bail!("sizing failed"));
         assert!(result.unwrap_err().to_string().contains("sizing failed"));
     }
 
     #[test]
-    fn preserves_original_when_it_already_fits() {
-        let mut tried = false;
-        let result = find_best_dpi(1_000, 346, |_| {
-            tried = true;
+    fn keeps_original_when_every_compressed_result_is_larger() {
+        let mut tried = Vec::new();
+        let result = find_best_dpi(346, |dpi| {
+            tried.push(dpi);
             Ok(2_398)
         })
         .unwrap();
-        assert!(!tried);
+        assert!(!tried.is_empty());
         assert_eq!(result.dpi, None);
         assert_eq!(result.size_bytes, 346);
-        assert!(result.met_target);
     }
 
     #[test]
@@ -318,7 +315,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/tiny.pdf"
         ));
-        let error = compress_pdf(input, &output, 1.0, |_| {})
+        let error = compress_pdf(input, &output, |_| {})
             .unwrap_err()
             .to_string();
         assert!(error.contains("already exists"), "{error}");

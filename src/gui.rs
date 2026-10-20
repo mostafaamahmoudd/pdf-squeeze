@@ -4,7 +4,7 @@ use eframe::egui;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-type WorkerResult = Result<(compress::SearchResult, PathBuf, f64), String>;
+type WorkerResult = Result<(compress::SearchResult, PathBuf), String>;
 enum WorkerMessage {
     Progress(compress::ProgressUpdate),
     Finished(WorkerResult),
@@ -22,7 +22,6 @@ pub fn run() -> Result<()> {
 struct PdfSqueezeApp {
     input: Option<PathBuf>,
     output: String,
-    target_mb: f64,
     progress: f32,
     ghostscript_error: Option<String>,
     worker: Option<Receiver<WorkerMessage>>,
@@ -33,7 +32,7 @@ struct PdfSqueezeApp {
 enum Status {
     Ready,
     Running,
-    Success(compress::SearchResult, PathBuf, f64),
+    Success(compress::SearchResult, PathBuf),
     Failure(String),
 }
 
@@ -43,7 +42,6 @@ impl PdfSqueezeApp {
         Self {
             input: None,
             output: String::new(),
-            target_mb: 50.0,
             progress: 0.0,
             ghostscript_error: gs::check_installed().err().map(|error| error.to_string()),
             worker: None,
@@ -62,16 +60,15 @@ impl PdfSqueezeApp {
             return;
         }
         let output = PathBuf::from(&self.output);
-        let target_mb = self.target_mb;
         let (sender, receiver) = mpsc::channel();
         self.progress = 0.0;
         match std::thread::Builder::new()
             .name("pdf-squeeze-compression".into())
             .spawn(move || {
-                let result = compress::compress_pdf(&input, &output, target_mb, |update| {
+                let result = compress::compress_pdf(&input, &output, |update| {
                     let _ = sender.send(WorkerMessage::Progress(update));
                 })
-                .map(|summary| (summary, output, target_mb))
+                .map(|summary| (summary, output))
                 .map_err(|error| format!("{error:#}"));
                 let _ = sender.send(WorkerMessage::Finished(result));
             }) {
@@ -91,7 +88,7 @@ impl PdfSqueezeApp {
         if let Some(result) = self.pending_result.take() {
             self.progress = 0.0;
             self.status = match result {
-                Ok((summary, output, target_mb)) => Status::Success(summary, output, target_mb),
+                Ok((summary, output)) => Status::Success(summary, output),
                 Err(error) => Status::Failure(error),
             };
             return;
@@ -162,13 +159,7 @@ impl eframe::App for PdfSqueezeApp {
             });
 
             ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.label("Target size (MB)");
-                ui.add_enabled(
-                    idle,
-                    egui::DragValue::new(&mut self.target_mb).range(0.001..=100_000.0),
-                );
-            });
+            ui.label("Compresses to the smallest file with acceptable quality (72 DPI floor).");
 
             ui.add_space(8.0);
             ui.label("Output path");
@@ -220,28 +211,18 @@ impl eframe::App for PdfSqueezeApp {
                     );
                     ctx.request_repaint();
                 }
-                Status::Success(summary, path, _) if summary.dpi.is_none() => {
-                    ui.label(format!(
-                        "This PDF already fits the target. Saved the original ({}), unchanged, to {}.",
-                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
-                        path.display()
-                    ));
+                Status::Success(summary, path) if summary.dpi.is_none() => {
+                    ui.label("This file is already as small as it can get without quality loss. Original kept.");
+                    ui.label(format!("Saved an unchanged copy to {}", path.display()));
                 }
-                Status::Success(summary, path, _) if summary.met_target => {
+                Status::Success(summary, path) => {
                     ui.label(format!(
-                        "Saved {} at {} DPI to {}",
+                        "Compressed from {} to {} at {} DPI.",
+                        compress::format_mb(summary.original_size_bytes as f64 / 1_000_000.0),
                         compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
                         summary.dpi.unwrap_or_default(),
-                        path.display()
                     ));
-                }
-                Status::Success(summary, path, requested_target) => {
-                    ui.label(format!(
-                        "This PDF could not reach the {} target without severe quality loss. The smallest result ({}) was saved to {}.",
-                        compress::format_mb(*requested_target),
-                        compress::format_mb(summary.size_bytes as f64 / 1_000_000.0),
-                        path.display()
-                    ));
+                    ui.label(format!("Saved to {}", path.display()));
                 }
                 Status::Failure(error) => {
                     ui.colored_label(egui::Color32::RED, error);
