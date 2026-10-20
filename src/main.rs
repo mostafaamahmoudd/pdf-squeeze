@@ -2,11 +2,78 @@ mod compress;
 mod gs;
 mod gui;
 
+use anyhow::Result;
+use clap::Parser;
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(name = "pdf-squeeze", about = "Compress one PDF to a target size")]
+struct Cli {
+    #[arg(value_name = "INPUT")]
+    input: PathBuf,
+    #[arg(
+        short = 't',
+        long = "target-mb",
+        default_value_t = 50.0,
+        value_name = "MB"
+    )]
+    target_mb: f64,
+    #[arg(short = 'o', long = "output", value_name = "PATH")]
+    output: Option<PathBuf>,
+}
+
 fn main() {
-    if std::env::args_os().len() == 1 {
-        if let Err(error) = gui::run() {
-            eprintln!("Could not open PDF Squeeze: {error}");
-            std::process::exit(1);
-        }
+    let result = if std::env::args_os().nth(1).is_none() {
+        gui::run()
+    } else {
+        run_cli()
+    };
+    if let Err(error) = result {
+        eprintln!("Error: {error:#}");
+        std::process::exit(1);
+    }
+}
+
+fn run_cli() -> Result<()> {
+    let cli = Cli::parse();
+    let output = cli
+        .output
+        .unwrap_or_else(|| compress::default_output_path(&cli.input));
+    let result = compress::compress_pdf(&cli.input, &output, cli.target_mb)?;
+    let size_mb = result.size_bytes as f64 / 1_000_000.0;
+    if result.met_target {
+        println!(
+            "Compressed to {size_mb:.2} MB at {} DPI. Saved to {}.",
+            result.dpi,
+            output.display()
+        );
+    } else {
+        eprintln!(
+            "Warning: the 50 DPI result is {size_mb:.2} MB, above the {:.2} MB target. The smallest result was saved to {}.",
+            cli.target_mb,
+            output.display()
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn defaults_target_to_fifty_mb() {
+        let cli = Cli::try_parse_from(["pdf-squeeze", "input.pdf"]).unwrap();
+        assert_eq!(cli.target_mb, 50.0);
+        assert!(cli.output.is_none());
+    }
+
+    #[test]
+    fn accepts_short_output_and_target_flags() {
+        let cli = Cli::try_parse_from(["pdf-squeeze", "input.pdf", "-t", "12.5", "-o", "out.pdf"])
+            .unwrap();
+        assert_eq!(cli.target_mb, 12.5);
+        assert_eq!(cli.output.unwrap(), std::path::PathBuf::from("out.pdf"));
     }
 }
