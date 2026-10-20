@@ -103,6 +103,12 @@ mod simulated_ghostscript {
     // Isolate PATH on the application child so parallel tests cannot change
     // each other's Ghostscript. Only the external process is simulated.
     fn run_with_script(body: &str) -> (tempfile::TempDir, std::process::Output) {
+        let mut original = include_bytes!("fixtures/tiny.pdf").to_vec();
+        original.extend_from_slice(&[b' '; 8192]);
+        run_with_input(body, &original)
+    }
+
+    fn run_with_input(body: &str, original: &[u8]) -> (tempfile::TempDir, std::process::Output) {
         let directory = tempfile::tempdir().unwrap();
         let bin = directory.path().join("bin");
         std::fs::create_dir(&bin).unwrap();
@@ -112,6 +118,7 @@ mod simulated_ghostscript {
             &script,
             format!(
                 "#!/bin/sh\nif [ \"$1\" = '--version' ]; then printf '10.0\\n'; exit 0; fi\n\
+                 printf 'conversion\\n' >> \"${{0%/*}}/conversions.log\"\n\
                  for arg in \"$@\"; do\n\
                  case \"$arg\" in -sOutputFile=*) output=${{arg#-sOutputFile=}} ;; esac\n\
                  done\n{body}\n"
@@ -120,8 +127,6 @@ mod simulated_ghostscript {
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let mut original = fixture.as_bytes().to_vec();
-        original.extend_from_slice(&[b' '; 8192]);
         let input = directory.path().join("input.pdf");
         std::fs::write(&input, original).unwrap();
         let result = Command::new(env!("CARGO_BIN_EXE_pdf-squeeze"))
@@ -129,9 +134,96 @@ mod simulated_ghostscript {
             .arg("--output")
             .arg(directory.path().join("output.pdf"))
             .env("PATH", &bin)
+            .env(
+                "PDF_SQUEEZE_TEST_DESTINATION",
+                directory.path().join("output.pdf"),
+            )
             .output()
             .unwrap();
         (directory, result)
+    }
+
+    fn assert_one_conversion(directory: &std::path::Path) {
+        assert_eq!(
+            std::fs::read_to_string(directory.join("bin/conversions.log")).unwrap(),
+            "conversion\n",
+            "a job must execute exactly one compression subprocess"
+        );
+    }
+
+    #[test]
+    fn compresses_once_and_reports_the_profile_and_savings() {
+        let (directory, result) = run_with_script("printf '%s' 'VALID_PDF' > \"$output\"");
+        assert!(result.status.success(), "{result:?}");
+        assert_one_conversion(directory.path());
+        assert_eq!(
+            std::fs::read(directory.path().join("output.pdf")).unwrap(),
+            include_bytes!("fixtures/tiny.pdf")
+        );
+        let mut original = include_bytes!("fixtures/tiny.pdf").to_vec();
+        original.extend_from_slice(&[b' '; 8192]);
+        assert_eq!(
+            std::fs::read(directory.path().join("input.pdf")).unwrap(),
+            original
+        );
+        let message = String::from_utf8_lossy(&result.stdout);
+        for expected in [
+            "95.9% saved",
+            "Profile: /ebook",
+            "elapsed:",
+            "compression passes: 1",
+        ] {
+            assert!(
+                message.contains(expected),
+                "missing {expected:?}: {message}"
+            );
+        }
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 3);
+    }
+
+    #[test]
+    fn copies_the_original_after_one_equal_or_larger_valid_result() {
+        for padding in ["", "printf '%512s' '' >> \"$output\""] {
+            let (directory, result) = run_with_input(
+                &format!("printf '%s' 'VALID_PDF' > \"$output\"\n{padding}"),
+                include_bytes!("fixtures/tiny.pdf"),
+            );
+            assert!(result.status.success(), "{result:?}");
+            assert_one_conversion(directory.path());
+            for name in ["input.pdf", "output.pdf"] {
+                assert_eq!(
+                    std::fs::read(directory.path().join(name)).unwrap(),
+                    include_bytes!("fixtures/tiny.pdf")
+                );
+            }
+            let message = String::from_utf8_lossy(&result.stdout);
+            assert!(message.contains("Original kept"), "{message}");
+            assert!(message.contains("unchanged copy"), "{message}");
+            assert!(message.contains("0.0% saved"), "{message}");
+            assert!(!message.contains("without quality loss"), "{message}");
+            assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 3);
+        }
+    }
+
+    #[test]
+    fn protects_a_destination_created_during_compression() {
+        let (directory, result) = run_with_script(
+            "printf 'keep existing output' > \"$PDF_SQUEEZE_TEST_DESTINATION\"\n\
+             printf '%s' 'VALID_PDF' > \"$output\"",
+        );
+        assert!(!result.status.success(), "{result:?}");
+        assert_one_conversion(directory.path());
+        assert_eq!(
+            std::fs::read(directory.path().join("output.pdf")).unwrap(),
+            b"keep existing output"
+        );
+        let mut original = include_bytes!("fixtures/tiny.pdf").to_vec();
+        original.extend_from_slice(&[b' '; 8192]);
+        assert_eq!(
+            std::fs::read(directory.path().join("input.pdf")).unwrap(),
+            original
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 3);
     }
 
     fn assert_rejected(body: &str, expected: &[&str]) {
@@ -187,6 +279,7 @@ mod simulated_ghostscript {
             "printf '' > \"$output\"",
             "/bin/rm \"$output\"\nexit 0",
             "printf 'not a PDF' > \"$output\"",
+            "printf 'not a PDF' > \"$output\"\nprintf '%10000s' '' >> \"$output\"",
             "printf '%%PDF-1.4\\ntruncated' > \"$output\"",
             "printf '%%PDF-1.4\\n%%%%EOF\\n' > \"$output\"",
             "printf '%%PDF-1.4\\nstartxref\\n999999\\n%%%%EOF\\n' > \"$output\"",

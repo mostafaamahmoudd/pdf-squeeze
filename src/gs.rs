@@ -3,6 +3,20 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::{Command, Output};
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CompressionProfile {
+    #[default]
+    Ebook,
+}
+
+impl CompressionProfile {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ebook => "/ebook",
+        }
+    }
+}
+
 pub fn executable() -> &'static str {
     if cfg!(windows) {
         "gswin64c"
@@ -40,19 +54,13 @@ pub fn check_installed() -> Result<()> {
     }
 }
 
-pub fn build_args(input: &Path, output: &Path, dpi: u32) -> Vec<OsString> {
+pub fn build_args(input: &Path, output: &Path, profile: CompressionProfile) -> Vec<OsString> {
     let mut output_arg = OsString::from("-sOutputFile=");
     output_arg.push(output.as_os_str());
     vec![
         "-sDEVICE=pdfwrite".into(),
         "-dCompatibilityLevel=1.4".into(),
-        "-dPDFSETTINGS=/ebook".into(),
-        format!("-dColorImageResolution={dpi}").into(),
-        format!("-dGrayImageResolution={dpi}").into(),
-        format!("-dMonoImageResolution={dpi}").into(),
-        "-dColorImageDownsampleThreshold=1.0".into(),
-        "-dGrayImageDownsampleThreshold=1.0".into(),
-        "-dMonoImageDownsampleThreshold=1.0".into(),
+        format!("-dPDFSETTINGS={}", profile.name()).into(),
         "-dDetectDuplicateImages=true".into(),
         "-dNOPAUSE".into(),
         "-dQUIET".into(),
@@ -91,9 +99,9 @@ fn has_fatal_diagnostic(bytes: &[u8]) -> bool {
     })
 }
 
-pub fn run(input: &Path, output: &Path, dpi: u32) -> Result<Output> {
+pub fn run(input: &Path, output: &Path, profile: CompressionProfile) -> Result<Output> {
     let result = Command::new(executable())
-        .args(build_args(input, output, dpi))
+        .args(build_args(input, output, profile))
         .output()
         .with_context(|| format!("Could not start Ghostscript. {}", install_hint()))?;
     if !result.status.success()
@@ -101,7 +109,8 @@ pub fn run(input: &Path, output: &Path, dpi: u32) -> Result<Output> {
         || has_fatal_diagnostic(&result.stderr)
     {
         bail!(
-            "Ghostscript failed at {dpi} DPI ({}). {}",
+            "Ghostscript failed using {} ({}). {}",
+            profile.name(),
             result.status,
             diagnostics(&result)
         );
@@ -119,17 +128,15 @@ mod tests {
 
     #[test]
     fn builds_required_ghostscript_arguments() {
-        let args = build_args(Path::new("input.pdf"), Path::new("result.pdf"), 125);
+        let args = build_args(
+            Path::new("input.pdf"),
+            Path::new("result.pdf"),
+            CompressionProfile::default(),
+        );
         let expected: Vec<OsString> = [
             "-sDEVICE=pdfwrite",
             "-dCompatibilityLevel=1.4",
             "-dPDFSETTINGS=/ebook",
-            "-dColorImageResolution=125",
-            "-dGrayImageResolution=125",
-            "-dMonoImageResolution=125",
-            "-dColorImageDownsampleThreshold=1.0",
-            "-dGrayImageDownsampleThreshold=1.0",
-            "-dMonoImageDownsampleThreshold=1.0",
             "-dDetectDuplicateImages=true",
             "-dNOPAUSE",
             "-dQUIET",

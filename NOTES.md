@@ -1,12 +1,14 @@
 # Compression notes
 
-The target-size search was removed because the tool now optimizes for a small output at acceptable quality, rather than a user-specified size budget. The 72 DPI floor aims to keep text in raster content readable; below that, many pages become unusable. Vector text is not controlled by image DPI.
+Each successful compression job runs Ghostscript exactly once, excluding installation/version checks. The default profile is `/ebook`; there is no resolution search or automatic fallback. `gs::CompressionProfile` centralizes the preset name so a future opt-in `/screen` profile can be added without restoring repeated conversions.
 
-`find_best_dpi` measures 72 and 300 DPI, then halves the interval while its bounds differ by more than 5 DPI. It compares each midpoint with the current lower-bound sample to choose a half, and retains the smallest output measured at any step. Its size-producing closure keeps the decision logic testable without PDFs or Ghostscript. Ghostscript output size can be non-monotonic, so this heuristic does not prove a global minimum.
+The engine validates input paths and preserves the existing output protections, then creates one candidate inside a temporary directory beside the destination. A conversion error or invalid candidate aborts the job. A candidate is checked even when it is larger than the original, so a failed conversion cannot become an unchanged-copy success.
 
-After the search, the tool compares the smallest Ghostscript output with the original input. It saves the Ghostscript result only when that result is strictly smaller. Otherwise, it copies the original unchanged: some PDFs are already optimized, and Ghostscript can enlarge them. Both outcomes provide a usable output file.
+Only a strictly smaller valid candidate is published. Otherwise, the original is copied once over the private candidate path, retaining the copied-byte-count check. A smaller candidate needs no additional full-file copy. `persist_noclobber` publishes the selected file without replacing an existing destination. Dropping temporary paths/directories cleans up on normal errors and completion.
 
-Each attempt is written inside a temporary directory in the output folder. The selected PDF or unchanged input copy is moved to the requested path only after the search finishes, and only if that path does not already exist. Dropping the temporary directory removes all other attempts, including after an error. The tool compares file sizes with `metadata().len()` and does not parse PDF content; it checks only the `%PDF-` header before starting Ghostscript. The GUI receives a progress update after each Ghostscript invocation. Its progress bar uses an eight-step estimate, so one step may take a while on a large file.
+Strict PDF error mode and known fatal stdout/stderr diagnostics guard conversion failures. Bounded candidate checks verify the PDF header, EOF/startxref trailer, offset bounds, and classic cross-reference-table marker. The existing PDF 1.4 output setting is retained. These checks are not a complete PDF parser or a guarantee of content preservation.
+
+Both GUI and CLI call `compress::compress_pdf` and display its shared summary: original/output bytes, percentage saved, elapsed job time (including detection, validation and publication), profile, and compression invocation count. The GUI worker sends stage updates for detection, conversion, validation and saving; a spinner provides activity feedback without a time estimate or progress percentage.
 
 Every Ghostscript invocation uses:
 
@@ -14,16 +16,11 @@ Every Ghostscript invocation uses:
 -sDEVICE=pdfwrite
 -dCompatibilityLevel=1.4
 -dPDFSETTINGS=/ebook
--dColorImageResolution=<dpi>
--dGrayImageResolution=<dpi>
--dMonoImageResolution=<dpi>
--dColorImageDownsampleThreshold=1.0
--dGrayImageDownsampleThreshold=1.0
--dMonoImageDownsampleThreshold=1.0
 -dDetectDuplicateImages=true
 -dNOPAUSE -dQUIET -dBATCH
+-dPDFSTOPONERROR=true
 -sOutputFile=<temporary PDF>
 <input PDF>
 ```
 
-`/ebook` supplies Ghostscript's general PDF compression settings. The explicit image resolution flags set the quality level being searched. The `DownsampleThreshold=1.0` flags make eligible images downsample at the chosen resolution rather than waiting for a higher threshold. Duplicate-image detection can avoid storing repeated images more than once. Quiet batch mode prevents interactive prompts; subprocess stderr is retained for errors.
+`/ebook` now supplies image resolution and downsampling thresholds as well as the general preset settings. The previous per-image DPI and threshold overrides are removed. Duplicate-image detection and all existing strict failure/diagnostic handling remain. Preset processing may change image quality and other document properties; the app makes no lossless, whole-document DPI, or target-size guarantee. A valid result may be larger than the input, particularly for already optimized or vector-heavy documents.
