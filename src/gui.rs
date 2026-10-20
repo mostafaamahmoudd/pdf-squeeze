@@ -3,9 +3,12 @@ use anyhow::{anyhow, Result};
 use eframe::egui;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::time::Duration;
 
 type WorkerResult = Result<(compress::SearchResult, PathBuf, f64), String>;
+enum WorkerMessage {
+    Progress(compress::ProgressUpdate),
+    Finished(WorkerResult),
+}
 
 pub fn run() -> Result<()> {
     eframe::run_native(
@@ -20,8 +23,10 @@ struct PdfSqueezeApp {
     input: Option<PathBuf>,
     output: String,
     target_mb: f64,
+    progress: f32,
     ghostscript_error: Option<String>,
-    worker: Option<Receiver<WorkerResult>>,
+    worker: Option<Receiver<WorkerMessage>>,
+    pending_result: Option<WorkerResult>,
     status: Status,
 }
 
@@ -39,8 +44,10 @@ impl PdfSqueezeApp {
             input: None,
             output: String::new(),
             target_mb: 50.0,
+            progress: 0.0,
             ghostscript_error: gs::check_installed().err().map(|error| error.to_string()),
             worker: None,
+            pending_result: None,
             status: Status::Ready,
         }
     }
@@ -57,13 +64,16 @@ impl PdfSqueezeApp {
         let output = PathBuf::from(&self.output);
         let target_mb = self.target_mb;
         let (sender, receiver) = mpsc::channel();
+        self.progress = 0.0;
         match std::thread::Builder::new()
             .name("pdf-squeeze-compression".into())
             .spawn(move || {
-                let result = compress::compress_pdf(&input, &output, target_mb)
-                    .map(|summary| (summary, output, target_mb))
-                    .map_err(|error| format!("{error:#}"));
-                let _ = sender.send(result);
+                let result = compress::compress_pdf(&input, &output, target_mb, |update| {
+                    let _ = sender.send(WorkerMessage::Progress(update));
+                })
+                .map(|summary| (summary, output, target_mb))
+                .map_err(|error| format!("{error:#}"));
+                let _ = sender.send(WorkerMessage::Finished(result));
             }) {
             Ok(_) => {
                 self.worker = Some(receiver);
@@ -78,22 +88,37 @@ impl PdfSqueezeApp {
     }
 
     fn poll_worker(&mut self) {
-        let result = self.worker.as_ref().map(Receiver::try_recv);
-        match result {
-            Some(Ok(Ok((summary, output, target_mb)))) => {
-                self.status = Status::Success(summary, output, target_mb);
-                self.worker = None;
+        if let Some(result) = self.pending_result.take() {
+            self.progress = 0.0;
+            self.status = match result {
+                Ok((summary, output, target_mb)) => Status::Success(summary, output, target_mb),
+                Err(error) => Status::Failure(error),
+            };
+            return;
+        }
+
+        loop {
+            let message = self.worker.as_ref().map(Receiver::try_recv);
+            match message {
+                Some(Ok(WorkerMessage::Progress(update))) => {
+                    self.progress = update.current_step as f32 / update.total_steps as f32;
+                }
+                Some(Ok(WorkerMessage::Finished(result))) => {
+                    self.progress = 1.0;
+                    self.pending_result = Some(result);
+                    self.worker = None;
+                    break;
+                }
+                Some(Err(TryRecvError::Disconnected)) => {
+                    self.progress = 1.0;
+                    self.pending_result = Some(Err(
+                        "Compression stopped unexpectedly. Please try again.".into(),
+                    ));
+                    self.worker = None;
+                    break;
+                }
+                _ => break,
             }
-            Some(Ok(Err(error))) => {
-                self.status = Status::Failure(error);
-                self.worker = None;
-            }
-            Some(Err(TryRecvError::Disconnected)) => {
-                self.status =
-                    Status::Failure("Compression stopped unexpectedly. Please try again.".into());
-                self.worker = None;
-            }
-            _ => {}
         }
     }
 }
@@ -102,7 +127,7 @@ impl eframe::App for PdfSqueezeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_worker();
         egui::CentralPanel::default().show(ctx, |ui| {
-            let idle = self.worker.is_none();
+            let idle = self.worker.is_none() && self.pending_result.is_none();
             ui.heading("PDF Squeeze");
             ui.add_space(12.0);
 
@@ -175,9 +200,7 @@ impl eframe::App for PdfSqueezeApp {
             if self.input.is_some() && !valid_input {
                 ui.label("Choose an existing PDF file to continue.");
             }
-            let can_compress = valid_input
-                && self.ghostscript_error.is_none()
-                && self.worker.is_none();
+            let can_compress = valid_input && self.ghostscript_error.is_none() && idle;
             if ui
                 .add_enabled(can_compress, egui::Button::new("Compress"))
                 .clicked()
@@ -189,11 +212,13 @@ impl eframe::App for PdfSqueezeApp {
             match &self.status {
                 Status::Ready => {}
                 Status::Running => {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label("Compressing your PDF…");
-                    });
-                    ctx.request_repaint_after(Duration::from_millis(100));
+                    ui.label("Compressing your PDF…");
+                    ui.add(
+                        egui::ProgressBar::new(self.progress.clamp(0.0, 1.0))
+                            .show_percentage()
+                            .animate(true),
+                    );
+                    ctx.request_repaint();
                 }
                 Status::Success(summary, path, _) if summary.dpi.is_none() => {
                     ui.label(format!(

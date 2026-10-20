@@ -6,6 +6,13 @@ use std::path::Path;
 
 pub const MIN_DPI: u32 = 50;
 pub const MAX_DPI: u32 = 300;
+pub const ESTIMATED_TOTAL_STEPS: usize = 8;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProgressUpdate {
+    pub current_step: usize,
+    pub total_steps: usize,
+}
 
 pub fn format_mb(mb: f64) -> String {
     let precision = if mb < 0.01 { 6 } else { 2 };
@@ -117,7 +124,12 @@ pub fn default_output_path(input: &Path) -> std::path::PathBuf {
     input.with_file_name(name)
 }
 
-pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<SearchResult> {
+pub fn compress_pdf(
+    input: &Path,
+    output: &Path,
+    target_mb: f64,
+    mut on_progress: impl FnMut(ProgressUpdate),
+) -> Result<SearchResult> {
     validate_input(input)?;
     if !target_mb.is_finite() || target_mb <= 0.0 || target_mb > (u64::MAX as f64) / 1_000_000.0 {
         bail!("Target size must be a positive number of MB");
@@ -163,13 +175,20 @@ pub fn compress_pdf(input: &Path, output: &Path, target_mb: f64) -> Result<Searc
     gs::check_installed()?;
 
     let mut attempts = Vec::<(u32, tempfile::TempPath)>::new();
+    let mut current_step = 0;
     let result = find_best_dpi(target_bytes, original_size, |dpi| {
         let trial = tempfile::Builder::new()
             .suffix(".pdf")
             .tempfile_in(trials.path())
             .context("Could not create a temporary PDF")?
             .into_temp_path();
-        gs::run(&input, &trial, dpi)?;
+        let invocation = gs::run(&input, &trial, dpi);
+        current_step += 1;
+        on_progress(ProgressUpdate {
+            current_step,
+            total_steps: ESTIMATED_TOTAL_STEPS,
+        });
+        invocation?;
         let size = fs::metadata(&trial)
             .with_context(|| {
                 format!(
@@ -299,7 +318,9 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/tiny.pdf"
         ));
-        let error = compress_pdf(input, &output, 1.0).unwrap_err().to_string();
+        let error = compress_pdf(input, &output, 1.0, |_| {})
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("already exists"), "{error}");
         assert_eq!(std::fs::read(output).unwrap(), b"keep this");
     }

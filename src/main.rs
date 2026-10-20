@@ -39,7 +39,7 @@ fn run_cli() -> Result<()> {
     let output = cli
         .output
         .unwrap_or_else(|| compress::default_output_path(&cli.input));
-    let result = compress::compress_pdf(&cli.input, &output, cli.target_mb)?;
+    let result = compress::compress_pdf(&cli.input, &output, cli.target_mb, |_| {})?;
     let size = compress::format_mb(result.size_bytes as f64 / 1_000_000.0);
     match (result.dpi, result.met_target) {
         (None, _) => println!(
