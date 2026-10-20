@@ -1,6 +1,7 @@
 use crate::gs;
 use anyhow::{bail, Context, Result};
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 pub const MIN_DPI: u32 = 50;
@@ -77,6 +78,25 @@ pub fn validate_input(input: &Path) -> Result<()> {
     {
         bail!(
             "Input '{}' is not a PDF file (.pdf required)",
+            input.display()
+        );
+    }
+    let mut file = fs::File::open(input).with_context(|| {
+        format!(
+            "Could not open input PDF '{}': check permissions",
+            input.display()
+        )
+    })?;
+    let mut header = [0_u8; 5];
+    file.read_exact(&mut header).with_context(|| {
+        format!(
+            "Input '{}' is not a PDF file (missing PDF header)",
+            input.display()
+        )
+    })?;
+    if &header != b"%PDF-" {
+        bail!(
+            "Input '{}' is not a PDF file (missing PDF header)",
             input.display()
         );
     }
@@ -185,5 +205,23 @@ mod tests {
     fn displays_small_megabyte_values_without_rounding_to_zero() {
         assert_eq!(format_mb(0.000001), "0.000001 MB");
         assert_eq!(format_mb(12.345), "12.35 MB");
+    }
+
+    #[test]
+    fn rejects_non_pdf_content_before_ghostscript() {
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("fake.pdf");
+        std::fs::write(&input, b"not a PDF").unwrap();
+        let error = validate_input(&input).unwrap_err().to_string();
+        assert!(error.contains("not a PDF"), "{error}");
+    }
+
+    #[test]
+    fn accepts_pdf_header() {
+        let input = Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/tiny.pdf"
+        ));
+        validate_input(input).unwrap();
     }
 }
