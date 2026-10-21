@@ -33,11 +33,38 @@ impl CompressionProfile {
     }
 }
 
-pub fn executable() -> &'static str {
-    if cfg!(windows) {
-        "gswin64c"
-    } else {
-        "gs"
+#[cfg(any(target_os = "macos", test))]
+fn macos_ghostscript_program(path: Option<&OsStr>, known_locations: &[&Path]) -> OsString {
+    if path.is_some_and(|value| {
+        std::env::split_paths(value).any(|directory| directory.join("gs").is_file())
+    }) {
+        return OsString::from("gs");
+    }
+    known_locations
+        .iter()
+        .find(|location| location.is_file())
+        .map(|location| location.as_os_str().to_os_string())
+        .unwrap_or_else(|| OsString::from("gs"))
+}
+
+pub fn executable() -> OsString {
+    #[cfg(target_os = "macos")]
+    {
+        return macos_ghostscript_program(
+            std::env::var_os("PATH").as_deref(),
+            &[
+                Path::new("/opt/homebrew/bin/gs"),
+                Path::new("/usr/local/bin/gs"),
+            ],
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if cfg!(windows) {
+            OsString::from("gswin64c")
+        } else {
+            OsString::from("gs")
+        }
     }
 }
 
@@ -52,18 +79,19 @@ pub fn install_hint() -> &'static str {
 }
 
 pub fn check_installed() -> Result<()> {
-    let output = ghostscript_command(executable()).arg("--version").output();
+    let program = executable();
+    let output = ghostscript_command(&program).arg("--version").output();
     match output {
         Ok(result) if result.status.success() => Ok(()),
         Ok(result) => bail!(
             "Ghostscript is unavailable (`{} --version` exited with {}). {}",
-            executable(),
+            program.to_string_lossy(),
             result.status,
             install_hint()
         ),
         Err(error) => bail!(
             "Ghostscript is unavailable (`{} --version`: {}). {}",
-            executable(),
+            program.to_string_lossy(),
             error,
             install_hint()
         ),
@@ -141,6 +169,24 @@ mod tests {
     use super::*;
     use std::ffi::OsString;
     use std::path::Path;
+
+    #[test]
+    fn macos_ghostscript_finds_homebrew_without_a_shell_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let homebrew = directory.path().join("homebrew");
+        std::fs::create_dir(&homebrew).unwrap();
+        let executable = homebrew.join("gs");
+        std::fs::write(&executable, b"test").unwrap();
+
+        assert_eq!(
+            macos_ghostscript_program(Some(OsStr::new("")), &[executable.as_path()]),
+            executable.as_os_str()
+        );
+        assert_eq!(
+            macos_ghostscript_program(Some(homebrew.as_os_str()), &[executable.as_path()]),
+            OsStr::new("gs")
+        );
+    }
 
     #[cfg(windows)]
     #[test]
