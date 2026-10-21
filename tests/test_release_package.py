@@ -1,3 +1,4 @@
+import configparser
 import plistlib
 import stat
 import tarfile
@@ -10,6 +11,14 @@ from scripts.package_release import build_package
 
 
 class ReleasePackageTests(unittest.TestCase):
+    def test_desktop_launcher_opens_gui_without_claiming_pdf_files(self):
+        desktop = configparser.ConfigParser(interpolation=None)
+        desktop.read(Path(__file__).resolve().parent.parent / "packaging" / "pdf-squeeze.desktop")
+        entry = desktop["Desktop Entry"]
+        self.assertEqual(entry["Exec"], "pdf-squeeze")
+        self.assertEqual(entry["Terminal"], "false")
+        self.assertNotIn("MimeType", entry)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -23,7 +32,7 @@ class ReleasePackageTests(unittest.TestCase):
         for platform in ("WINDOWS", "LINUX", "MACOS"):
             (packaging / f"INSTALL-{platform}.md").write_text(f"{platform} install\n")
         (packaging / "pdf-squeeze.desktop").write_text(
-            "[Desktop Entry]\nType=Application\nExec=pdf-squeeze %f\nIcon=pdf-squeeze\n"
+            "[Desktop Entry]\nType=Application\nExec=pdf-squeeze\nIcon=pdf-squeeze\n"
         )
         icons = self.root / "assets" / "icons"
         icons.mkdir(parents=True)
@@ -56,7 +65,7 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertTrue(executable.mode & stat.S_IXUSR)
             desktop = package.extractfile("share/applications/pdf-squeeze.desktop").read()
             self.assertIn(b"Icon=pdf-squeeze", desktop)
-            self.assertIn(b"Exec=pdf-squeeze %f", desktop)
+            self.assertIn(b"Exec=pdf-squeeze\n", desktop)
 
     def test_macos_archives_contain_valid_app_bundle(self):
         for platform in ("macos-arm64", "macos-x64"):
