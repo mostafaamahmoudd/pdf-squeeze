@@ -28,15 +28,22 @@ jobs:
 
       - name: Install Ghostscript
         shell: pwsh
+        timeout-minutes: 5
         run: |
-          choco install ghostscript --yes --no-progress
+          # Extract the upstream installer; interactive installation stalls on headless runners.
+          $installer = Join-Path $env:RUNNER_TEMP 'gs10080w64.exe'
+          $root = Join-Path $env:RUNNER_TEMP 'ghostscript'
+          Invoke-WebRequest 'https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe' -OutFile $installer
+          $expectedHash = '52a91b8bf09298788d7a57b9206127026c23eacd75405f0a131e26dc381dce50'
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $expectedHash) {
+            throw 'Ghostscript archive checksum mismatch'
+          }
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $installer "-o$root" -y
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $ghostscript = Get-ChildItem "$env:ProgramFiles\gs\*\bin\gswin64c.exe" |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-          if (-not $ghostscript) { throw 'Ghostscript console executable was not found' }
-          $ghostscript.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & $ghostscript.FullName --version
+          "$root\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "GS_LIB=$root\lib;$root\Resource\Init;$root\Resource\Font;$root\fonts" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$root\bin\gswin64c.exe" --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Ghostscript integration and GUI worker tests
