@@ -110,6 +110,8 @@ jobs:
           otool -L "$executable"
           "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
           cmp tests/fixtures/tiny.pdf "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-finder-path-output.pdf"
+          cmp tests/fixtures/tiny.pdf "$RUNNER_TEMP/pdf-squeeze-finder-path-output.pdf"
 
       - name: Upload release archive
         uses: actions/upload-artifact@v4
@@ -139,6 +141,10 @@ jobs:
         run: |
           version=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "pdf-squeeze"))')
           test "$GITHUB_REF_NAME" = "v$version"
+          if test ! -s LICENSE; then
+            echo 'A verified LICENSE file is required before publishing a Release' >&2
+            exit 1
+          fi
           git fetch origin master
           git merge-base --is-ancestor "$GITHUB_SHA" origin/master
 

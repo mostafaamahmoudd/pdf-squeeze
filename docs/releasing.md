@@ -9,6 +9,6 @@ The Windows job reuses `.github/workflows/windows-build.yml`, including the PDF 
 - Linux: inspect the release job's `ldd` output and test on the intended distributions. The Ubuntu 22.04 build is not universally portable. A graphical X11 or Wayland session, an XDG desktop portal backend, and Zenity are needed for a dependable GUI and file picker.
 - macOS: the `.app` archives are valid experimental bundles, but they have no Developer ID signature or Apple notarization. Gatekeeper can block a downloaded bundle. A polished public release requires Developer ID signing, notarization, and validation on actual Macs.
 - Ghostscript: users install it separately; no archive includes it. Verify the intended distribution and use against [Artifex's licensing guidance](https://ghostscript.com/faq/). External-process use is not an automatic AGPL exemption.
-- Project license: `Cargo.toml` declares MIT, but this repository currently has no verified `LICENSE` text. Confirm copyright ownership and add the correct license file and any required third-party notices before a public release.
+- Project license: `Cargo.toml` declares MIT, but this repository currently has no verified `LICENSE` text. The publishing job fails until a nonempty `LICENSE` file exists. Confirm copyright ownership and add the correct license file and any required third-party notices before a public release.
 
 Do not push a version tag until the native builds, license review, interactive GUI checks, and release notes have been reviewed. The workflow does not sign or notarize macOS bundles.
