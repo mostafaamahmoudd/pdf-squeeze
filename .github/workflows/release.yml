@@ -3,7 +3,7 @@ name: release-builds
 on:
   workflow_dispatch:
   push:
-    branches: ['ci/**', 'feat/**']
+    branches: ['ci/**', 'feat/**', 'chore/release-licensing']
     tags: ['v*']
 
 permissions:
@@ -55,6 +55,14 @@ jobs:
           test "$(rustc -vV | sed -n 's/^host: //p')" = '${{ matrix.target }}'
           gs --version
 
+      - name: Fetch all locked sources for license verification
+        run: cargo fetch --locked
+
+      - name: Verify third-party licensing material
+        run: |
+          python3 scripts/license_inventory.py --check
+          python3 scripts/verify_licenses.py
+
       - name: Check formatting
         run: cargo fmt --check
 
@@ -74,10 +82,13 @@ jobs:
         run: cargo build --release --locked
 
       - name: Test release packaging
-        run: python3 -m unittest discover -s tests -p test_release_package.py
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Package release
         run: python3 scripts/package_release.py --platform '${{ matrix.platform }}' --binary target/release/pdf-squeeze --out-dir release-dist
+
+      - name: Verify archived licensing material
+        run: python3 scripts/verify_licenses.py --archive 'release-dist/pdf-squeeze-${{ matrix.platform }}.${{ matrix.platform == 'linux-x64' && 'tar.gz' || 'zip' }}'
 
       - name: Verify Linux archive, dynamic libraries and CLI
         if: runner.os == 'Linux'
@@ -154,6 +165,7 @@ jobs:
             echo 'A verified LICENSE file is required before publishing a Release' >&2
             exit 1
           fi
+          python3 scripts/verify_licenses.py --require-publishable
           git fetch origin master
           git merge-base --is-ancestor "$GITHUB_SHA" origin/master
 
@@ -163,6 +175,14 @@ jobs:
           pattern: release-*
           path: release-dist
           merge-multiple: true
+
+      - name: Verify publication license documentation in every archive
+        run: |
+          python3 scripts/verify_licenses.py --require-publishable \
+            --archive release-dist/pdf-squeeze-windows-x64.zip \
+            --archive release-dist/pdf-squeeze-linux-x64.tar.gz \
+            --archive release-dist/pdf-squeeze-macos-arm64.zip \
+            --archive release-dist/pdf-squeeze-macos-x64.zip
 
       - name: Verify archives and generate checksums
         run: |
