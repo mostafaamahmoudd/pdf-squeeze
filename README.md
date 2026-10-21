@@ -14,6 +14,12 @@ Ghostscript must be available on `PATH` as `gs` on macOS/Linux or `gswin64c` on 
 | Windows | `choco install ghostscript` |
 | Ubuntu/Debian Linux | `sudo apt install ghostscript` |
 
+Ghostscript is installed separately and is not included in any release archive. Check its availability with `gs --version` on Linux/macOS or `gswin64c --version` on Windows. Its [AGPL and commercial licensing options](https://ghostscript.com/licensing/) need review for the intended distribution; launching an external process does not by itself settle those obligations.
+
+## Release packages
+
+GitHub Releases provide `pdf-squeeze-windows-x64.zip`, `pdf-squeeze-linux-x64.tar.gz`, `pdf-squeeze-macos-arm64.zip`, and `pdf-squeeze-macos-x64.zip`, plus `SHA256SUMS.txt`. Each package includes an `INSTALL.md` with platform-specific instructions. Linux builds use Ubuntu 22.04 and are not guaranteed to work on every distribution. macOS bundles are experimental and are not Developer ID signed or notarized; Gatekeeper may block them.
+
 On Linux, building the native GUI may also require:
 
 ```sh
@@ -45,7 +51,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-`eframe` requires the `libxcb-*` and `libxkbcommon-dev` packages on Linux; `zenity` is required for native file dialogs via `rfd`, and without it the file picker will not open.
+`eframe` requires the `libxcb-*` and `libxkbcommon-dev` packages on Linux. `rfd` uses the XDG desktop portal by default; a portal backend and Zenity should be installed for reliable file dialogs.
 
 ### macOS
 

@@ -1,9 +1,13 @@
 name: windows-build
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -75,9 +79,42 @@ jobs:
       - name: Build release
         run: cargo build --release --locked
 
+      - name: Test release packaging
+        run: python -m unittest discover -s tests -p test_release_package.py
+
+      - name: Package Windows release
+        run: python scripts/package_release.py --platform windows-x64 --binary target/release/pdf-squeeze.exe --out-dir release-dist
+
+      - name: Verify Windows archive and release executable
+        shell: pwsh
+        run: |
+          $extracted = Join-Path $env:RUNNER_TEMP 'pdf-squeeze-release-check'
+          Expand-Archive release-dist/pdf-squeeze-windows-x64.zip -DestinationPath $extracted
+          $exe = Join-Path $extracted 'pdf-squeeze.exe'
+          $output = Join-Path $env:RUNNER_TEMP 'pdf-squeeze-release-output.pdf'
+          if (!(Test-Path $exe) -or !(Test-Path (Join-Path $extracted 'INSTALL.md')) -or
+              !(Test-Path (Join-Path $extracted 'README.md'))) {
+            throw 'Windows archive is incomplete'
+          }
+          & $exe tests/fixtures/tiny.pdf --output $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $output -Algorithm SHA256).Hash -ne
+              (Get-FileHash tests/fixtures/tiny.pdf -Algorithm SHA256).Hash) {
+            throw 'Release executable produced unexpected PDF output'
+          }
+          Write-Host 'Windows archive and release CLI smoke test passed'
+
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: pdf-squeeze-windows
           path: target/release/pdf-squeeze.exe
           if-no-files-found: error
+
+      - name: Upload Windows release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-x64
+          path: release-dist/pdf-squeeze-windows-x64.zip
+          if-no-files-found: error
+          compression-level: 0
