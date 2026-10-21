@@ -15,7 +15,9 @@ pub fn run() -> Result<()> {
         "../assets/icons/hicolor/256x256/apps/pdf-squeeze.png"
     ))?;
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_icon(icon),
+        viewport: egui::ViewportBuilder::default()
+            .with_icon(icon)
+            .with_app_id("pdf-squeeze"),
         ..Default::default()
     };
     eframe::run_native(
