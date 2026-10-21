@@ -13,9 +13,40 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Check compilation
+        run: cargo check --locked
+
+      - name: Run tests including Windows console suppression
+        run: cargo test --locked
+
+      - name: Install Ghostscript
+        shell: pwsh
+        run: |
+          choco install ghostscript --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $ghostscript = Get-ChildItem "$env:ProgramFiles\gs\*\bin\gswin64c.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $ghostscript) { throw 'Ghostscript console executable was not found' }
+          $ghostscript.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $ghostscript.FullName --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run Ghostscript integration and GUI worker tests
+        run: cargo test --locked -- --ignored
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4
