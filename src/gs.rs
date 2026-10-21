@@ -1,7 +1,23 @@
 use anyhow::{bail, Context, Result};
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Output};
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn ghostscript_command(program: impl AsRef<OsStr>) -> Command {
+    let command = Command::new(program);
+    #[cfg(windows)]
+    let command = {
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        command
+    };
+    command
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionProfile {
@@ -36,7 +52,7 @@ pub fn install_hint() -> &'static str {
 }
 
 pub fn check_installed() -> Result<()> {
-    let output = Command::new(executable()).arg("--version").output();
+    let output = ghostscript_command(executable()).arg("--version").output();
     match output {
         Ok(result) if result.status.success() => Ok(()),
         Ok(result) => bail!(
@@ -100,7 +116,7 @@ fn has_fatal_diagnostic(bytes: &[u8]) -> bool {
 }
 
 pub fn run(input: &Path, output: &Path, profile: CompressionProfile) -> Result<Output> {
-    let result = Command::new(executable())
+    let result = ghostscript_command(executable())
         .args(build_args(input, output, profile))
         .output()
         .with_context(|| format!("Could not start Ghostscript. {}", install_hint()))?;
@@ -125,6 +141,38 @@ mod tests {
     use super::*;
     use std::ffi::OsString;
     use std::path::Path;
+
+    #[cfg(windows)]
+    #[test]
+    fn subprocess_has_no_console_and_preserves_diagnostics() {
+        const PROBE: &str = "PDF_SQUEEZE_CONSOLE_PROBE";
+        if std::env::var_os(PROBE).is_some() {
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn GetConsoleWindow() -> *mut std::ffi::c_void;
+            }
+
+            // SAFETY: This API takes no arguments and returns a borrowed handle.
+            assert!(unsafe { GetConsoleWindow() }.is_null());
+            println!("console probe stdout");
+            eprintln!("console probe stderr");
+            return;
+        }
+
+        // The debug test executable is a console program, like gswin64c.exe.
+        let result = ghostscript_command(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "gs::tests::subprocess_has_no_console_and_preserves_diagnostics",
+                "--nocapture",
+            ])
+            .env(PROBE, "1")
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+        assert!(String::from_utf8_lossy(&result.stdout).contains("console probe stdout"));
+        assert!(String::from_utf8_lossy(&result.stderr).contains("console probe stderr"));
+    }
 
     #[test]
     fn builds_required_ghostscript_arguments() {

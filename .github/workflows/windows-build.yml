@@ -11,11 +11,69 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify PDF fixture checkout
+        shell: pwsh
+        run: |
+          @'
+          import hashlib
+          import pathlib
+          import subprocess
+
+          fixture = pathlib.Path('tests/fixtures/tiny.pdf')
+          checkout = fixture.read_bytes()
+          blob = subprocess.check_output(['git', 'show', 'HEAD:tests/fixtures/tiny.pdf'])
+          digest = lambda data: hashlib.sha256(data).hexdigest()
+          if checkout != blob:
+              raise SystemExit(
+                  f'{fixture} differs from Git blob: checkout {len(checkout)} bytes, '
+                  f'SHA-256 {digest(checkout)}; blob {len(blob)} bytes, '
+                  f'SHA-256 {digest(blob)}')
+          print(f'{fixture}: {len(checkout)} bytes, SHA-256 {digest(checkout)}; matches Git blob')
+          '@ | python -
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Check compilation
+        run: cargo check --locked
+
+      - name: Run tests including Windows console suppression
+        run: cargo test --locked
+
+      - name: Install Ghostscript
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          # Extract the upstream installer; interactive installation stalls on headless runners.
+          $installer = Join-Path $env:RUNNER_TEMP 'gs10080w64.exe'
+          $root = Join-Path $env:RUNNER_TEMP 'ghostscript'
+          Invoke-WebRequest 'https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/gs10080w64.exe' -OutFile $installer
+          $expectedHash = '52a91b8bf09298788d7a57b9206127026c23eacd75405f0a131e26dc381dce50'
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $expectedHash) {
+            throw 'Ghostscript archive checksum mismatch'
+          }
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $installer "-o$root" -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "$root\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "GS_LIB=$root\lib;$root\Resource\Init;$root\Resource\Font;$root\fonts" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$root\bin\gswin64c.exe" --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run Ghostscript integration and GUI worker tests
+        run: cargo test --locked -- --ignored
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --locked
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4

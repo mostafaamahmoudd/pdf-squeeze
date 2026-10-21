@@ -117,7 +117,8 @@ mod simulated_ghostscript {
         std::fs::write(
             &script,
             format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then printf '10.0\\n'; exit 0; fi\n\
+                "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"${{0%/*}}/launches.log\"\n\
+                 if [ \"$1\" = '--version' ]; then printf '10.0\\n'; exit 0; fi\n\
                  printf 'conversion\\n' >> \"${{0%/*}}/conversions.log\"\n\
                  for arg in \"$@\"; do\n\
                  case \"$arg\" in -sOutputFile=*) output=${{arg#-sOutputFile=}} ;; esac\n\
@@ -144,6 +145,11 @@ mod simulated_ghostscript {
     }
 
     fn assert_one_conversion(directory: &std::path::Path) {
+        assert_eq!(
+            std::fs::read_to_string(directory.join("bin/launches.log")).unwrap(),
+            "--version\n-sDEVICE=pdfwrite\n",
+            "a job must launch version detection followed by one conversion"
+        );
         assert_eq!(
             std::fs::read_to_string(directory.join("bin/conversions.log")).unwrap(),
             "conversion\n",
