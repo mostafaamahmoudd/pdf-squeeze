@@ -50,7 +50,7 @@ fn macos_ghostscript_program(path: Option<&OsStr>, known_locations: &[&Path]) ->
 pub fn executable() -> OsString {
     #[cfg(target_os = "macos")]
     {
-        return macos_ghostscript_program(
+        macos_ghostscript_program(
             std::env::var_os("PATH").as_deref(),
             &[
                 Path::new("/opt/homebrew/bin/gs"),
