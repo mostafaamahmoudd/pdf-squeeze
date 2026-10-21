@@ -46,6 +46,39 @@ jobs:
           & "$root\bin\gswin64c.exe" --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Diagnose PDF fixture bytes and Ghostscript
+        shell: pwsh
+        run: |
+          @'
+          import hashlib
+          import pathlib
+          import subprocess
+          import tempfile
+
+          fixture = pathlib.Path('tests/fixtures/tiny.pdf')
+          checkout = fixture.read_bytes()
+          blob = subprocess.check_output(['git', 'show', 'HEAD:tests/fixtures/tiny.pdf'])
+          for label, data in [('checkout', checkout), ('Git blob', blob)]:
+              print(f'{label}: {len(data)} bytes, SHA-256 {hashlib.sha256(data).hexdigest()}')
+          print('Git attributes:', subprocess.check_output(
+              ['git', 'check-attr', '-a', '--', str(fixture)], text=True).strip() or '(none)')
+          for setting in ['core.autocrlf', 'core.eol', 'core.safecrlf']:
+              result = subprocess.run(['git', 'config', '--show-origin', '--get', setting],
+                                      capture_output=True, text=True)
+              print(f'{setting}: {result.stdout.strip() or "(unset)"}')
+
+          with tempfile.TemporaryDirectory() as directory:
+              original = pathlib.Path(directory) / 'original.pdf'
+              original.write_bytes(blob)
+              for label, path in [('checkout', fixture), ('Git blob', original)]:
+                  result = subprocess.run(['gswin64c', '-q', '-dBATCH', '-dNOPAUSE',
+                                           '-dPDFSTOPONERROR', '-sDEVICE=nullpage', str(path)],
+                                          capture_output=True, text=True)
+                  print(f'Ghostscript {label}: exit {result.returncode}')
+                  if result.returncode:
+                      print((result.stdout + result.stderr)[-1500:])
+          '@ | python -
+
       - name: Run Ghostscript integration and GUI worker tests
         run: cargo test --locked -- --ignored
 
