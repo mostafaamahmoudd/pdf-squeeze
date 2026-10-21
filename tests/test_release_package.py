@@ -31,8 +31,8 @@ class ReleasePackageTests(unittest.TestCase):
         packaging.mkdir()
         for platform in ("WINDOWS", "LINUX", "MACOS"):
             (packaging / f"INSTALL-{platform}.md").write_text(f"{platform} install\n")
-        (packaging / "pdf-squeeze.desktop").write_text(
-            "[Desktop Entry]\nType=Application\nExec=pdf-squeeze\nIcon=pdf-squeeze\n"
+        (packaging / "pdf-squeeze.desktop").write_bytes(
+            b"[Desktop Entry]\r\nType=Application\r\nExec=pdf-squeeze\r\nIcon=pdf-squeeze\r\n"
         )
         icons = self.root / "assets" / "icons"
         icons.mkdir(parents=True)
@@ -63,9 +63,9 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(set(package.getnames()), expected)
             executable = package.getmember("pdf-squeeze")
             self.assertTrue(executable.mode & stat.S_IXUSR)
-            desktop = package.extractfile("share/applications/pdf-squeeze.desktop").read()
-            self.assertIn(b"Icon=pdf-squeeze", desktop)
-            self.assertIn(b"Exec=pdf-squeeze\n", desktop)
+            desktop = package.extractfile("share/applications/pdf-squeeze.desktop").read().decode()
+            self.assertIn("Icon=pdf-squeeze", desktop.splitlines())
+            self.assertIn("Exec=pdf-squeeze", desktop.splitlines())
 
     def test_macos_archives_contain_valid_app_bundle(self):
         for platform in ("macos-arm64", "macos-x64"):
