@@ -93,8 +93,59 @@ jobs:
           $exe = Join-Path $extracted 'pdf-squeeze.exe'
           $output = Join-Path $env:RUNNER_TEMP 'pdf-squeeze-release-output.pdf'
           if (!(Test-Path $exe) -or !(Test-Path (Join-Path $extracted 'INSTALL.md')) -or
-              !(Test-Path (Join-Path $extracted 'README.md'))) {
+              !(Test-Path (Join-Path $extracted 'README.md')) -or
+              !(Test-Path (Join-Path $extracted 'pdf-squeeze.ico'))) {
             throw 'Windows archive is incomplete'
+          }
+          @'
+          from pathlib import Path
+          import struct
+
+          icon = Path('release-dist/pdf-squeeze-windows-x64.zip')
+          import zipfile
+          with zipfile.ZipFile(icon) as package:
+              data = package.read('pdf-squeeze.ico')
+          reserved, kind, count = struct.unpack_from('<HHH', data)
+          assert (reserved, kind, count) == (0, 1, 7)
+          sizes = set()
+          for index in range(count):
+              width, height, _, _, _, depth, length, offset = struct.unpack_from(
+                  '<BBBBHHII', data, 6 + index * 16)
+              width, height = width or 256, height or 256
+              assert depth == 32 and data[offset:offset + 8] == b'\x89PNG\r\n\x1a\n'
+              assert offset + length <= len(data)
+              sizes.add((width, height))
+          assert sizes == {(s, s) for s in (16, 24, 32, 48, 64, 128, 256)}
+
+          exe = Path('target/release/pdf-squeeze.exe').read_bytes()
+          pe_offset = struct.unpack_from('<I', exe, 0x3c)[0]
+          assert exe[pe_offset:pe_offset + 4] == b'PE\0\0'
+          subsystem = struct.unpack_from('<H', exe, pe_offset + 24 + 68)[0]
+          assert subsystem == 2, f'Expected Windows GUI subsystem, got {subsystem}'
+          print('Multi-resolution icon and Windows GUI subsystem verified')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $probe = @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class PdfSqueezeIconProbe {
+              [DllImport("kernel32.dll", EntryPoint = "LoadLibraryExW", CharSet = CharSet.Unicode, SetLastError = true)]
+              public static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+              [DllImport("kernel32.dll", EntryPoint = "FindResourceW", SetLastError = true)]
+              public static extern IntPtr FindResource(IntPtr module, IntPtr name, IntPtr type);
+              [DllImport("kernel32.dll", SetLastError = true)]
+              public static extern bool FreeLibrary(IntPtr module);
+          }
+          '@
+          Add-Type -TypeDefinition $probe
+          $module = [PdfSqueezeIconProbe]::LoadLibraryEx($exe, [IntPtr]::Zero, 2)
+          if ($module -eq [IntPtr]::Zero) { throw 'Could not inspect Windows executable resources' }
+          try {
+            if ([PdfSqueezeIconProbe]::FindResource($module, [IntPtr]1, [IntPtr]14) -eq [IntPtr]::Zero) {
+              throw 'Windows executable has no application icon resource (group icon 1)'
+            }
+          } finally {
+            [void][PdfSqueezeIconProbe]::FreeLibrary($module)
           }
           & $exe tests/fixtures/tiny.pdf --output $output
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

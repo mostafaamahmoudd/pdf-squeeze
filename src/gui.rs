@@ -11,9 +11,16 @@ enum WorkerMessage {
 }
 
 pub fn run() -> Result<()> {
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!(
+        "../assets/icons/hicolor/256x256/apps/pdf-squeeze.png"
+    ))?;
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_icon(icon),
+        ..Default::default()
+    };
     eframe::run_native(
         "PDF Squeeze",
-        eframe::NativeOptions::default(),
+        options,
         Box::new(|cc| Ok(Box::new(PdfSqueezeApp::new(cc)))),
     )
     .map_err(|error| anyhow!("{error}"))
