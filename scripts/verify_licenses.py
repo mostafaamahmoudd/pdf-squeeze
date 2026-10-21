@@ -7,6 +7,11 @@ import tarfile
 import zipfile
 from pathlib import Path
 
+if __package__:
+    from .license_pointers import resolve_pointer, verified_recoveries
+else:
+    from license_pointers import resolve_pointer, verified_recoveries
+
 
 REQUIRED = ('THIRD_PARTY_NOTICES.md', 'LICENSING.md', 'third_party/inventory.json',
             'third_party/fonts.json', 'third_party/supplemental.json')
@@ -35,6 +40,15 @@ def license_files(root, require_publishable=False):
             raise ValueError(f"Missing or unsafe notice path: {entry['path']}")
         if hashlib.sha256((root / entry['path']).read_bytes()).hexdigest() != entry['sha256']:
             raise ValueError(f"Notice checksum mismatch: {entry['path']}")
+    for package in inventory['packages']:
+        contents = {n['path']: (root / n['path']).read_bytes() for n in package['notices']}
+        recoveries = verified_recoveries(package, supplements, contents)
+        for notice in package['notices']:
+            resolution = resolve_pointer(notice['path'], contents, recoveries)
+            if notice.get('pointer') != resolution:
+                raise ValueError(f"Pointer resolution mismatch: {notice['path']}")
+            if resolution and resolution['status'] != 'resolved' and require_publishable:
+                raise ValueError(f"Unresolved license pointer: {notice['path']}")
     if require_publishable:
         issues = [(p['name'], p['issues']) for p in inventory['packages'] if p['issues']]
         if issues:

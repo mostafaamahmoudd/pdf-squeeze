@@ -146,6 +146,55 @@ class ReleasePackageTests(unittest.TestCase):
         inventory.write_text(json.dumps(content))
         self.assertIn('LICENSE', license_files(self.root, require_publishable=True))
 
+
+    def test_publication_recomputes_pointer_resolution(self):
+        from scripts.license_pointers import resolve_pointer
+        (self.root / 'LICENSE').write_text('Test fixture only\n')
+        inventory = self.root / 'third_party/inventory.json'
+        content = json.loads(inventory.read_text())
+        path = 'third_party/licenses/example/LICENSE'
+        (self.root / path).write_bytes(b'../LICENSE.MIT')
+        notice = content['packages'][0]['notices'][0]
+        notice['sha256'] = hashlib.sha256(b'../LICENSE.MIT').hexdigest()
+        notice['pointer'] = resolve_pointer(path, {path: b'../LICENSE.MIT'})
+        content['packages'][0]['issues'] = ['Unresolved license pointer']
+        inventory.write_text(json.dumps(content))
+        archive = build_package('windows-x64', self.binary, self.root / 'dist', '0.1.0', self.root)
+        verify_archive(self.root, archive)
+        # Clearing declared issues cannot hide an unresolved pointer.
+        content['packages'][0]['issues'] = []
+        inventory.write_text(json.dumps(content))
+        with self.assertRaisesRegex(ValueError, 'Unresolved license pointer'):
+            license_files(self.root, require_publishable=True)
+        notice['pointer'] = dict(target='../LICENSE.MIT', status='resolved')
+        inventory.write_text(json.dumps(content))
+        with self.assertRaisesRegex(ValueError, 'Pointer resolution mismatch'):
+            license_files(self.root)
+
+
+    def test_publication_rejects_nonstandard_direct_and_nested_pointers(self):
+        from scripts.license_pointers import resolve_pointer
+        (self.root / 'LICENSE').write_text('Test fixture only\n')
+        inventory = self.root / 'third_party/inventory.json'
+        original = json.loads(inventory.read_text())
+        path = 'third_party/licenses/example/LICENSE'
+        for data, nested in [(b'legal/terms', None), (b'"./legal notices/LICENSE MIT.txt"', None),
+                             (b'./legal/terms', b'other/terms')]:
+            with self.subTest(data=data, nested=nested):
+                contents = {path: data}
+                if nested:
+                    contents['third_party/licenses/example/legal/terms'] = nested
+                package = dict(original['packages'][0], notices=[], issues=[])
+                for name, value in contents.items():
+                    destination = self.root / name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(value)
+                    package['notices'].append(dict(path=name, sha256=hashlib.sha256(value).hexdigest(),
+                                                   pointer=resolve_pointer(name, contents)))
+                inventory.write_text(json.dumps(dict(original, packages=[package])))
+                with self.assertRaisesRegex(ValueError, 'Unresolved license pointer'):
+                    license_files(self.root, require_publishable=True)
+
     def test_archive_verifier_rejects_missing_or_changed_notice(self):
         archive = build_package('windows-x64', self.binary, self.root / 'dist', '0.1.0', self.root)
         verify_archive(self.root, archive)

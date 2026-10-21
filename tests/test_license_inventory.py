@@ -62,6 +62,54 @@ class LicenseInventoryTests(unittest.TestCase):
 
 
 
+
+
+    def test_vcs_symlink_cannot_supply_recovery_provenance(self):
+        vcs = self.root / 'source/.cargo_vcs_info.json'
+        vcs.write_text('{"git": {"sha1": "untrusted"}}')
+        original = Path.is_symlink
+        with patch.object(Path, 'is_symlink', lambda path: path == vcs or original(path)):
+            with self.assertRaisesRegex(ValueError, 'Unsafe upstream VCS'):
+                collect(self.root, self.metadata, {})
+
+    def test_pointer_targets_are_copied_and_resolved_in_distribution(self):
+        original = b'./legal/terms.txt\r\n'
+        (self.root / 'source/LICENSE').write_bytes(original)
+        legal = self.root / 'source/legal'
+        legal.mkdir()
+        (legal / 'terms.txt').write_bytes(b'Original upstream permission text\n')
+        files = collect(self.root, self.metadata, {})
+        package = json.loads(files['third_party/inventory.json'])['packages'][0]
+        notice = next(n for n in package['notices'] if n['path'].endswith('/LICENSE'))
+        self.assertEqual(notice['pointer']['status'], 'resolved')
+        self.assertEqual(notice['pointer']['resolved_path'], 'third_party/licenses/example-1.0.0/legal/terms.txt')
+        self.assertEqual(files['third_party/licenses/example-1.0.0/LICENSE'], original)
+        self.assertEqual(files['third_party/licenses/example-1.0.0/legal/terms.txt'], b'Original upstream permission text\n')
+        self.assertEqual(package['issues'], [])
+
+    def test_missing_pointer_is_an_issue_even_with_other_notices(self):
+        (self.root / 'source/LICENSE').write_bytes(b'../LICENSE.MIT')
+        files = collect(self.root, self.metadata, {})
+        package = json.loads(files['third_party/inventory.json'])['packages'][0]
+        self.assertTrue(any('Unresolved license pointer' in issue for issue in package['issues']))
+        notice = next(n for n in package['notices'] if n['path'].endswith('/LICENSE'))
+        self.assertEqual(notice['pointer']['status'], 'unresolved')
+        self.assertEqual(files['third_party/licenses/example-1.0.0/LICENSE'], b'../LICENSE.MIT')
+
+    def test_pointer_escape_does_not_read_or_copy_outside_source(self):
+        (self.root / 'source/LICENSE').write_bytes(b'../LICENSE.MIT')
+        (self.root / 'LICENSE.MIT').write_bytes(b'UNRELATED PRIVATE CONTENT')
+        original_read = Path.read_bytes
+        outside = self.root / 'LICENSE.MIT'
+        def guarded_read(path):
+            self.assertNotEqual(path, outside, 'Generator tried to read outside the crate source')
+            return original_read(path)
+        with patch.object(Path, 'read_bytes', guarded_read):
+            files = collect(self.root, self.metadata, {})
+        self.assertFalse(any(b'UNRELATED PRIVATE CONTENT' in data for data in files.values()))
+        package = json.loads(files['third_party/inventory.json'])['packages'][0]
+        self.assertTrue(any('Unresolved license pointer' in issue for issue in package['issues']))
+
     def test_ordinary_source_code_is_not_a_license_notice(self):
         (self.root / 'source/LICENSE').unlink()
         (self.root / 'source/fonts/Hack-Regular.txt').unlink()

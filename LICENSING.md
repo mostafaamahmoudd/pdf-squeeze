@@ -83,6 +83,60 @@ SDK-derived code; appropriate review is still needed. An older Steven Sheldon
 MIT grant has not been assigned to these newer revisions. Finding at least one
 notice for another crate does not prove all its obligations are covered.
 
+## Relative license pointers
+
+The scan found two pointer-only notices in the current inventory, both in
+wgpu-hal 24.0.4: `../LICENSE.APACHE` and `../LICENSE.MIT`. The original files
+remain unchanged under third_party/licenses/wgpu-hal-24.0.4. They are references,
+not complete license texts. Their packaged resolutions are recorded explicitly
+in inventory.json and linked from THIRD_PARTY_NOTICES.md.
+
+The published crate records upstream revision
+`993fc39b07e8a4418a15043265298d7bc016d059` and path `wgpu-hal`. At that exact
+revision the original files are Git symlinks to the repository-root LICENSE
+files, and wgpu-hal/Cargo.toml declares version 24.0.4. The recovered
+[MIT text](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT)
+and [Apache text](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE)
+were checked against the same revision's Git blob IDs. supplemental.json records
+the immutable URLs, revision, upstream paths, original link and target blob IDs,
+manifest URL/hash, file SHA-256 hashes and exact pointer-to-text associations.
+No sibling crate or unrelated revision was silently substituted.
+
+scripts/license_pointers.py recognizes single UTF-8 paths to conventionally named notices, files
+under license directories, dot-relative or slash-separated paths, and relative
+text/Markdown paths. Quoted paths and explicit paths containing spaces are
+supported. License expressions such as
+`MIT/Apache-2.0` remain expressions. Other encodings and prose references require manual review; this is not a
+general prose/reference parser.
+Recognition does not classify the legal completeness of ordinary notice text.
+
+The generator follows references inside the individual crate source directory
+and copies reachable targets into the same relative layout, even when a target
+has a nonstandard name. It does not read parent registry directories or follow
+source symlinks. Source cycles terminate without recursion into already visited
+files. Missing targets, empty targets, cycles and attempts to escape approved
+locations produce unresolved issues. Absolute, Windows drive and UNC references
+are rejected. Resolution is checked using only this component's included notice
+bytes under third_party; it never reads a referenced filesystem path.
+
+A target omitted from a crate archive can be supplied only through an explicit
+supplemental `resolves` mapping whose GitHub repository URL and revision match the
+crate's recorded VCS source. The original pointer is resolved against the
+recorded upstream crate path; its target must exactly match the supplemental
+upstream path, so another file from the same revision cannot be substituted.
+The local supplemental file must pass its recorded
+hash check and actually be included among that component's notices. Recovery is
+not inferred from a matching basename or from another crate's license text.
+The package verifier recomputes pointer resolutions and compares them with the
+inventory. Publication rejects unresolved pointers even if their issue strings
+are accidentally removed. Test archives can retain accurately recorded gaps.
+
+Current coverage is 429 crates, 666 preserved crate notice files, 55 supplemental
+upstream files and 726 licensing files per archive. The pointer evidence for
+wgpu-hal is resolved; the same 13 previously documented component gaps remain.
+This resolution is engineering evidence and does not establish full compliance,
+project ownership, icon rights, Ghostscript compatibility or Apple SDK rights.
+
 ## Embedded fonts and other resources
 
 The four egui fonts are embedded by epaint_default_fonts 0.31.1. Its package-level

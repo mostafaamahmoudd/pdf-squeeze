@@ -21562,13 +21562,41 @@
       "notices": [
         {
           "path": "third_party/licenses/wgpu-hal-24.0.4/LICENSE.APACHE",
+          "pointer": {
+            "chain": [
+              "third_party/licenses/wgpu-hal-24.0.4/LICENSE.APACHE"
+            ],
+            "resolved_path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE",
+            "status": "resolved",
+            "target": "../LICENSE.APACHE",
+            "via": "verified-upstream"
+          },
           "sha256": "93322bf14207312d2ac79c0dc02f97f4592bc3c72d9e1a4f6012c21a0f6d816d",
           "source": "wgpu-hal-24.0.4/LICENSE.APACHE"
         },
         {
           "path": "third_party/licenses/wgpu-hal-24.0.4/LICENSE.MIT",
+          "pointer": {
+            "chain": [
+              "third_party/licenses/wgpu-hal-24.0.4/LICENSE.MIT"
+            ],
+            "resolved_path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT",
+            "status": "resolved",
+            "target": "../LICENSE.MIT",
+            "via": "verified-upstream"
+          },
           "sha256": "10b693f4060285108e21fbca779818813849a4bb52101b6ec0512e4b0750ba64",
           "source": "wgpu-hal-24.0.4/LICENSE.MIT"
+        },
+        {
+          "path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT",
+          "sha256": "c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4",
+          "source": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT"
+        },
+        {
+          "path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "source": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE"
         }
       ],
       "repository": "https://github.com/gfx-rs/wgpu",

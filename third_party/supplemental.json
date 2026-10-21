@@ -500,5 +500,41 @@
     "url": "https://raw.githubusercontent.com/zakarumych/gpu-descriptor/9f2fb9546591322e7b77ee1e79385e01effd85e4/license/APACHE",
     "path": "third_party/upstream/zakarumych-gpu-descriptor/9f2fb9546591322e7b77ee1e79385e01effd85e4/license/APACHE",
     "sha256": "6bec8c944a6d4251be50ac86bb4ca360bcce5aea472505dee2800e160bf1cdbf"
+  },
+  {
+    "crates": [
+      "wgpu-hal-24.0.4"
+    ],
+    "path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT",
+    "url": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT",
+    "revision": "993fc39b07e8a4418a15043265298d7bc016d059",
+    "upstream_path": "LICENSE.MIT",
+    "sha256": "c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4",
+    "resolves": [
+      "third_party/licenses/wgpu-hal-24.0.4/LICENSE.MIT"
+    ],
+    "basis": "Published crate VCS metadata records this revision and wgpu-hal path. Same-revision Cargo.toml declares version 24.0.4. Git tree identifies the original notice as a symlink to this root file; both link and target Git blob IDs were verified.",
+    "upstream_git_blob": "4699691b8ed37738afcbcd591c91f7759472c3d0",
+    "upstream_pointer_git_blob": "6b8772d1a7a230e6a9b8ed9f1980b6576847eb2e",
+    "upstream_manifest_url": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/wgpu-hal/Cargo.toml",
+    "upstream_manifest_sha256": "e20b7d55ff58b6753eb3a0f4d64670b2598477b0216fe677fd8de19b796cda17"
+  },
+  {
+    "crates": [
+      "wgpu-hal-24.0.4"
+    ],
+    "path": "third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE",
+    "url": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE",
+    "revision": "993fc39b07e8a4418a15043265298d7bc016d059",
+    "upstream_path": "LICENSE.APACHE",
+    "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+    "resolves": [
+      "third_party/licenses/wgpu-hal-24.0.4/LICENSE.APACHE"
+    ],
+    "basis": "Published crate VCS metadata records this revision and wgpu-hal path. Same-revision Cargo.toml declares version 24.0.4. Git tree identifies the original notice as a symlink to this root file; both link and target Git blob IDs were verified.",
+    "upstream_git_blob": "d9a10c0d8e868ebf8da0b3dc95bb0be634c34bfe",
+    "upstream_pointer_git_blob": "7141cad5b28e8b753fb44343caccf37c76cfbd69",
+    "upstream_manifest_url": "https://raw.githubusercontent.com/gfx-rs/wgpu/993fc39b07e8a4418a15043265298d7bc016d059/wgpu-hal/Cargo.toml",
+    "upstream_manifest_sha256": "e20b7d55ff58b6753eb3a0f4d64670b2598477b0216fe677fd8de19b796cda17"
   }
 ]

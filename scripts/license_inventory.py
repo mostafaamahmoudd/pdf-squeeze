@@ -12,6 +12,11 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
+if __package__:
+    from .license_pointers import pointer_target, relative_target, resolve_pointer, verified_recoveries
+else:
+    from license_pointers import pointer_target, relative_target, resolve_pointer, verified_recoveries
+
 
 TARGETS = {
     'windows-x64': 'x86_64-pc-windows-msvc',
@@ -106,7 +111,37 @@ def collect(repo_root, metadata, target_metadata):
         notices = []
         resources = []
         issues = []
+        included = set()
+
+        def include_notice(path):
+            # Crate source traversal never reads a parent registry directory or
+            # follows a symlink. Upstream recovery requires a separate manifest.
+            if path.is_symlink() or not path.resolve().is_relative_to(source.resolve()):
+                issues.append('Unsafe notice source path')
+                return
+            relative = path.relative_to(source).as_posix()
+            if relative in included or not path.is_file():
+                return
+            included.add(relative)
+            data = path.read_bytes()
+            if not data.strip():
+                issues.append(f'Empty upstream notice: {relative}')
+                return
+            destination = f'third_party/licenses/{key}/{relative}'
+            files[destination] = data
+            notices.append(dict(path=destination, source=f'{key}/{relative}', sha256=digest(data)))
+            target = pointer_target(data)
+            if target:
+                try:
+                    target_relative = relative_target(relative, target, '.')
+                except ValueError:
+                    return  # No outside read; distributed resolution records the gap.
+                include_notice(source / target_relative)
+
         for path in sorted(source.rglob('*'), key=lambda p: p.relative_to(source).as_posix()):
+            if path.is_symlink() or not path.resolve().is_relative_to(source.resolve()):
+                issues.append('Unsafe crate source path')
+                continue
             if not path.is_file():
                 continue
             relative = path.relative_to(source).as_posix()
@@ -115,13 +150,7 @@ def collect(repo_root, metadata, target_metadata):
             if package['license_file'] and path == source / package['license_file']:
                 is_notice = True
             if is_notice:
-                data = path.read_bytes()
-                if not data.strip():
-                    issues.append(f'Empty upstream notice: {relative}')
-                    continue
-                destination = f'third_party/licenses/{key}/{relative}'
-                files[destination] = data
-                notices.append(dict(path=destination, source=f'{key}/{relative}', sha256=digest(data)))
+                include_notice(path)
             if path.suffix.lower() in RESOURCE_SUFFIXES:
                 data = path.read_bytes()
                 resources.append(dict(path=relative, sha256=digest(data)))
@@ -136,9 +165,25 @@ def collect(repo_root, metadata, target_metadata):
         if not package['license']:
             issues.append('No declared license expression')
         vcs = source / '.cargo_vcs_info.json'
+        if vcs.is_symlink() or not vcs.resolve().is_relative_to(source.resolve()):
+            raise ValueError('Unsafe upstream VCS metadata path')
+        upstream_vcs = json.loads(vcs.read_text()) if vcs.exists() else None
+        provenance = dict(package, upstream_vcs=upstream_vcs)
+        contents = {n['path']: files[n['path']] if n['path'] in files else (repo_root / n['path']).read_bytes()
+                    for n in notices}
+        recoveries = verified_recoveries(provenance, supplements, contents)
+        for pointer in recoveries:
+            if pointer not in contents or pointer_target(contents[pointer]) is None:
+                raise ValueError(f'Recovery does not name a collected pointer: {pointer}')
+        for notice in notices:
+            resolution = resolve_pointer(notice['path'], contents, recoveries)
+            if resolution:
+                notice['pointer'] = resolution
+                if resolution['status'] != 'resolved':
+                    issues.append(f"Unresolved license pointer {notice['path']}: {resolution['reason']}")
         packages.append(dict(name=package['name'], version=package['version'], source=package['source'],
                              repository=package['repository'], license=package['license'],
-                             authors=package['authors'], upstream_vcs=json.loads(vcs.read_text()) if vcs.exists() else None,
+                             authors=package['authors'], upstream_vcs=upstream_vcs,
                              targets={target: mapping.get(package['id'], []) for target, mapping in roles.items()},
                              incoming=sorted(incoming[package['id']], key=lambda e: (e['package'], e['kind'], e['target'] or '')),
                              notices=notices, resources=resources, issues=issues))
@@ -172,6 +217,12 @@ def collect(repo_root, metadata, target_metadata):
         lines.extend([f"### {p['name']} {p['version']}", '', f"Declared license: `{p['license'] or 'UNDECLARED'}`", ''])
         for notice in p['notices']:
             lines.append(f"- [{notice['path']}]({notice['path']})")
+            if notice.get('pointer'):
+                pointer = notice['pointer']
+                if pointer['status'] == 'resolved':
+                    lines.append(f"  - Pointer `{pointer['target']}` resolved to [{pointer['resolved_path']}]({pointer['resolved_path']}) ({pointer['via']}).")
+                else:
+                    lines.append(f"  - **Unresolved pointer** `{pointer['target']}`: {pointer['reason']}.")
         for issue in p['issues']:
             lines.append(f'- **Unresolved:** {issue}')
         lines.append('')

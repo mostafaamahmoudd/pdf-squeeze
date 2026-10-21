@@ -2537,7 +2537,11 @@ Declared license: `MIT OR Apache-2.0`
 Declared license: `MIT OR Apache-2.0`
 
 - [third_party/licenses/wgpu-hal-24.0.4/LICENSE.APACHE](third_party/licenses/wgpu-hal-24.0.4/LICENSE.APACHE)
+  - Pointer `../LICENSE.APACHE` resolved to [third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE) (verified-upstream).
 - [third_party/licenses/wgpu-hal-24.0.4/LICENSE.MIT](third_party/licenses/wgpu-hal-24.0.4/LICENSE.MIT)
+  - Pointer `../LICENSE.MIT` resolved to [third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT) (verified-upstream).
+- [third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.MIT)
+- [third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE](third_party/upstream/gfx-rs-wgpu/993fc39b07e8a4418a15043265298d7bc016d059/LICENSE.APACHE)
 
 ### wgpu-types 24.0.0
 
