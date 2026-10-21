@@ -3,7 +3,7 @@ name: release-builds
 on:
   workflow_dispatch:
   push:
-    branches: ['ci/**']
+    branches: ['ci/**', 'feat/**']
     tags: ['v*']
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libdbus-1-dev ghostscript zenity
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libdbus-1-dev ghostscript zenity desktop-file-utils
 
       - name: Install macOS Ghostscript
         if: runner.os == 'macOS'
@@ -88,6 +88,11 @@ jobs:
           test -x "$executable"
           test -f "$RUNNER_TEMP/pdf-squeeze-release-check/README.md"
           test -f "$RUNNER_TEMP/pdf-squeeze-release-check/INSTALL.md"
+          desktop="$RUNNER_TEMP/pdf-squeeze-release-check/share/applications/pdf-squeeze.desktop"
+          desktop-file-validate "$desktop"
+          for size in 16 32 48 64 128 256 512; do
+            test -s "$RUNNER_TEMP/pdf-squeeze-release-check/share/icons/hicolor/${size}x${size}/apps/pdf-squeeze.png"
+          done
           file "$executable"
           ldd "$executable" | tee "$RUNNER_TEMP/pdf-squeeze-ldd.txt"
           if grep -q 'not found' "$RUNNER_TEMP/pdf-squeeze-ldd.txt"; then exit 1; fi
@@ -106,6 +111,10 @@ jobs:
           test -f "$RUNNER_TEMP/pdf-squeeze-release-check/INSTALL.md"
           plutil -lint "$app/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")" = 'pdf-squeeze'
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIconFile' "$app/Contents/Info.plist")" = 'pdf-squeeze.icns'
+          iconutil --convert iconset "$app/Contents/Resources/pdf-squeeze.icns" --output "$RUNNER_TEMP/pdf-squeeze-icon.iconset"
+          test -s "$RUNNER_TEMP/pdf-squeeze-icon.iconset/icon_16x16.png"
+          test -s "$RUNNER_TEMP/pdf-squeeze-icon.iconset/icon_512x512@2x.png"
           test "$(lipo -archs "$executable")" = '${{ matrix.macho_arch }}'
           otool -L "$executable"
           "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"

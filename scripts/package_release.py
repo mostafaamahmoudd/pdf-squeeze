@@ -43,11 +43,15 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
             executable.parent.mkdir(parents=True)
             shutil.copy2(binary, executable)
             executable.chmod(0o755)
+            resources = contents / "Resources"
+            resources.mkdir()
+            shutil.copy2(repo_root / "assets/icons/pdf-squeeze.icns", resources / "pdf-squeeze.icns")
             info = {
                 "CFBundleDevelopmentRegion": "en",
                 "CFBundleDisplayName": "PDF Squeeze",
                 "CFBundleExecutable": "pdf-squeeze",
                 "CFBundleIdentifier": "com.mostafaamahmoudd.pdf-squeeze",
+                "CFBundleIconFile": "pdf-squeeze.icns",
                 "CFBundleName": "PDF Squeeze",
                 "CFBundlePackageType": "APPL",
                 "CFBundleShortVersionString": version,
@@ -58,8 +62,14 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
         else:
             executable = stage / ("pdf-squeeze.exe" if platform == "windows-x64" else "pdf-squeeze")
             shutil.copy2(binary, executable)
-            if platform == "linux-x64":
+            if platform == "windows-x64":
+                shutil.copy2(repo_root / "assets/icons/pdf-squeeze.ico", stage / "pdf-squeeze.ico")
+            else:
                 executable.chmod(0o755)
+                applications = stage / "share" / "applications"
+                applications.mkdir(parents=True)
+                shutil.copy2(repo_root / "packaging/pdf-squeeze.desktop", applications / "pdf-squeeze.desktop")
+                shutil.copytree(repo_root / "assets/icons/hicolor", stage / "share" / "icons" / "hicolor")
 
         files = sorted(path for path in stage.rglob("*") if path.is_file())
         if extension == "zip":

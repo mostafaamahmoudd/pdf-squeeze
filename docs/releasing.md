@@ -1,6 +1,6 @@
 # Release review
 
-The release workflow builds four native archives on GitHub-hosted runners. A push to a `ci/**` branch runs a test build and uploads archives without publishing a Release. Once this workflow is merged into the default branch, `workflow_dispatch` also runs a test build. A pushed `v<package-version>` tag starts the same required jobs; the publishing job runs only after all four succeed, checks the tag against Cargo metadata, verifies the tag commit is on `master`, creates checksums and notes, and publishes a new Release. It refuses to overwrite an existing Release.
+The release workflow builds four native archives on GitHub-hosted runners. A push to a `ci/**` or `feat/**` branch runs a test build and uploads archives without publishing a Release. Once this workflow is merged into the default branch, `workflow_dispatch` also runs a test build. A pushed `v<package-version>` tag starts the same required jobs; the publishing job runs only after all four succeed, checks the tag against Cargo metadata, verifies the tag commit is on `master`, creates checksums and notes, and publishes a new Release. It refuses to overwrite an existing Release.
 
 The Windows job reuses `.github/workflows/windows-build.yml`, including the PDF fixture and console-suppression tests. Linux uses Ubuntu 22.04, and the two macOS jobs run on native Apple Silicon and Intel runners. The archive checks exercise the extracted CLI, not the interactive GUI. Native GUI smoke tests remain a separate release review item.
 

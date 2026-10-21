@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PDF Squeeze
+Comment=Compress PDF files with Ghostscript
+Exec=pdf-squeeze
+TryExec=pdf-squeeze
+Icon=pdf-squeeze
+Terminal=false
+Categories=Office;
