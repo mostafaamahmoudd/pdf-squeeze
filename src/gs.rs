@@ -47,24 +47,23 @@ fn macos_ghostscript_program(path: Option<&OsStr>, known_locations: &[&Path]) ->
         .unwrap_or_else(|| OsString::from("gs"))
 }
 
+#[cfg(target_os = "macos")]
 pub fn executable() -> OsString {
-    #[cfg(target_os = "macos")]
-    {
-        macos_ghostscript_program(
-            std::env::var_os("PATH").as_deref(),
-            &[
-                Path::new("/opt/homebrew/bin/gs"),
-                Path::new("/usr/local/bin/gs"),
-            ],
-        );
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if cfg!(windows) {
-            OsString::from("gswin64c")
-        } else {
-            OsString::from("gs")
-        }
+    macos_ghostscript_program(
+        std::env::var_os("PATH").as_deref(),
+        &[
+            Path::new("/opt/homebrew/bin/gs"),
+            Path::new("/usr/local/bin/gs"),
+        ],
+    )
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn executable() -> OsString {
+    if cfg!(windows) {
+        OsString::from("gswin64c")
+    } else {
+        OsString::from("gs")
     }
 }
 
