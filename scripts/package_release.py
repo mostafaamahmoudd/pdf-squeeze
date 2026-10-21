@@ -65,11 +65,19 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
         if extension == "zip":
             with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as package:
                 for path in files:
-                    package.write(path, path.relative_to(stage).as_posix())
+                    info = zipfile.ZipInfo(path.relative_to(stage).as_posix())
+                    info.create_system = 3
+                    info.external_attr = (0o100755 if path == executable else 0o100644) << 16
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    with path.open("rb") as source, package.open(info, "w") as destination:
+                        shutil.copyfileobj(source, destination)
         else:
             with tarfile.open(archive, "w:gz") as package:
                 for path in files:
-                    package.add(path, arcname=path.relative_to(stage).as_posix())
+                    info = package.gettarinfo(path, arcname=path.relative_to(stage).as_posix())
+                    info.mode = 0o755 if path == executable else 0o644
+                    with path.open("rb") as source:
+                        package.addfile(info, source)
     return archive
 
 
