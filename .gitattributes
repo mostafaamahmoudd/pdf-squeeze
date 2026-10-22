@@ -2,3 +2,10 @@
 *.png binary
 *.ico binary
 *.icns binary
+
+# Preserve verbatim upstream notices and reproducible inventory bytes on Windows.
+/third_party/** -text
+/THIRD_PARTY_NOTICES.md -text
+/LICENSING.md -text
+/LICENSE -text
+/Cargo.lock -text

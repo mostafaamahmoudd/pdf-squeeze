@@ -11,6 +11,12 @@ import zipfile
 from pathlib import Path
 
 
+if __package__:
+    from .verify_licenses import license_files
+else:
+    from verify_licenses import license_files
+
+
 PLATFORMS = {
     "windows-x64": ("zip", "WINDOWS"),
     "linux-x64": ("tar.gz", "LINUX"),
@@ -26,6 +32,7 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
     if not binary.is_file():
         raise FileNotFoundError(binary)
 
+    licensing = license_files(repo_root)
     extension, install_platform = PLATFORMS[platform]
     out_dir.mkdir(parents=True, exist_ok=True)
     archive = out_dir / f"pdf-squeeze-{platform}.{extension}"
@@ -33,9 +40,10 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
         stage = Path(temporary)
         shutil.copy2(repo_root / "README.md", stage / "README.md")
         shutil.copy2(repo_root / "packaging" / f"INSTALL-{install_platform}.md", stage / "INSTALL.md")
-        license_file = repo_root / "LICENSE"
-        if license_file.is_file():
-            shutil.copy2(license_file, stage / "LICENSE")
+        for path in licensing:
+            destination = stage / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(repo_root / path, destination)
 
         if platform.startswith("macos-"):
             contents = stage / "PDF Squeeze.app" / "Contents"

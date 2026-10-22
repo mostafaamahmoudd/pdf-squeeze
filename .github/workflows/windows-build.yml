@@ -41,6 +41,15 @@ jobs:
           toolchain: 1.89.0
           components: rustfmt, clippy
 
+      - name: Fetch all locked sources for license verification
+        run: cargo fetch --locked
+
+      - name: Verify third-party licensing material
+        run: |
+          python scripts/license_inventory.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_licenses.py
+
       - name: Check formatting
         run: cargo fmt --check
 
@@ -80,10 +89,13 @@ jobs:
         run: cargo build --release --locked
 
       - name: Test release packaging
-        run: python -m unittest discover -s tests -p test_release_package.py
+        run: python -m unittest discover -s tests -p 'test_*.py'
 
       - name: Package Windows release
         run: python scripts/package_release.py --platform windows-x64 --binary target/release/pdf-squeeze.exe --out-dir release-dist
+
+      - name: Verify archived licensing material
+        run: python scripts/verify_licenses.py --archive release-dist/pdf-squeeze-windows-x64.zip
 
       - name: Verify Windows archive and release executable
         shell: pwsh

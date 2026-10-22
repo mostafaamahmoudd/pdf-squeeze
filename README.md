@@ -18,7 +18,7 @@ Ghostscript is installed separately and is not included in any release archive. 
 
 ## Release packages
 
-GitHub Releases provide `pdf-squeeze-windows-x64.zip`, `pdf-squeeze-linux-x64.tar.gz`, `pdf-squeeze-macos-arm64.zip`, and `pdf-squeeze-macos-x64.zip`, plus `SHA256SUMS.txt`. Each package includes an `INSTALL.md` with platform-specific instructions. Linux builds use Ubuntu 22.04 and are not guaranteed to work on every distribution. macOS bundles are experimental and are not Developer ID signed or notarized; Gatekeeper may block them.
+Planned GitHub Releases will provide `pdf-squeeze-windows-x64.zip`, `pdf-squeeze-linux-x64.tar.gz`, `pdf-squeeze-macos-arm64.zip`, and `pdf-squeeze-macos-x64.zip`, plus `SHA256SUMS.txt`. Each package includes an `INSTALL.md` with platform-specific instructions, `THIRD_PARTY_NOTICES.md`, `LICENSING.md`, and supporting upstream notices under `third_party/`. No public release has been published; licensing review remains open. See [licensing evidence and outstanding questions](LICENSING.md) before distributing a build. Linux builds use Ubuntu 22.04 and are not guaranteed to work on every distribution. macOS bundles are experimental and are not Developer ID signed or notarized; Gatekeeper may block them.
 
 The application icon comes from `assets/icons/pdf-squeeze-icon.png`. Generated Windows, Linux, and macOS icon files are checked in; contributors can regenerate them with `python3 scripts/generate_icons.py` after installing Pillow. The Linux archive includes a desktop entry and icon sizes for manual installation.
 
