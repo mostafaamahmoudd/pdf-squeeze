@@ -61,19 +61,34 @@ lack VCS metadata; their texts were recovered from the upstream 0.3.9 revision,
 which contains the version 0.4.0 architecture packages. Keep this provenance
 qualification when reviewing those prebuilt import libraries.
 
-Four packages still have **no recovered license/notice text**:
+Four packages still have **no recovered license/notice text**. The SHA-256 values
+below identify the exact cached crates.io archives used for this investigation.
+Each archive's `src/lib.rs` is byte-identical to the linked upstream revision;
+the source-file SHA-256 is included so that comparison can be repeated. The
+repository trees and manifests at those revisions were inspected, as were the
+archive contents. For `block` and `malloc_buf`, which have no published VCS
+metadata, the linked version tags were used as source candidates.
 
-| Crate | Version | Declaration | Relevant graph paths | Outstanding evidence |
-| --- | --- | --- | --- | --- |
-| block | 0.1.6 | MIT | macOS | Published archive lacks license and copyright notice; historical upstream tag is 0.1.6. |
-| dispatch | 0.2.0 | MIT | macOS | Archive and recorded upstream revision lack a standalone license text. |
-| malloc_buf | 0.0.6 | MIT | macOS | Published archive lacks license and copyright notice. |
-| hexf-parse | 0.2.1 | CC0-1.0 | All four targets' conservative graphs | Archive and recorded upstream revision lack a standalone dedication/license text. |
+| Crate | Declaration and paths | Pinned upstream source | Archive SHA-256 | `src/lib.rs` SHA-256 | Finding |
+| --- | --- | --- | --- | --- | --- |
+| [block 0.1.6](https://static.crates.io/crates/block/block-0.1.6.crate) | MIT; macOS | [SSheldon/rust-block tag 0.1.6](https://github.com/SSheldon/rust-block/tree/47178790cfc9d4a8b092051d8b413b78bd31254a) | `0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a` | `eb31678adf63b53109d9b94eba23699fd5f9ebfdb950f6e1a57ad51bb6a146fa` | Neither archive nor exact-version repository tree contains license or copyright text. |
+| [dispatch 0.2.0](https://static.crates.io/crates/dispatch/dispatch-0.2.0.crate) | MIT; macOS | [SSheldon/rust-dispatch recorded VCS revision](https://github.com/SSheldon/rust-dispatch/tree/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748) | `bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b` | `1f75d8f3bb8dbc57449c8727c68d7c75e6a5cf20347617c96ab6a608f186612b` | Neither archive nor recorded revision contains license or copyright text. |
+| [malloc_buf 0.0.6](https://static.crates.io/crates/malloc_buf/malloc_buf-0.0.6.crate) | MIT; macOS | [SSheldon/malloc_buf tag 0.0.6](https://github.com/SSheldon/malloc_buf/tree/a7811e5f4c6f9685dd57ad9bfe34e9bf6b0ba4f9) | `62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb` | `1130dacbe045a20c1ea1e65e00976f18eb7513da492b07d538e7b1b5c64b8842` | No text at the tag or in the archive; a later MIT file does not establish the exact-version notice. |
+| [hexf-parse 0.2.1](https://static.crates.io/crates/hexf-parse/hexf-parse-0.2.1.crate) | CC0-1.0; all four conservative graphs | [lifthrasiir/hexf recorded VCS revision, `parse/` crate](https://github.com/lifthrasiir/hexf/tree/4225763d744183d720f575ae96d04161b4d08ea0/parse) | `dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df` | `511b164642efe470e88323b8afe0274e797805ff2441f0173b5b005ad4b4d1b1` | Neither archive nor recorded revision contains a CC0 dedication text. |
 
-Their metadata has not been treated as a substitute for missing upstream texts.
-Obtain authoritative notices or an appropriately reviewed resolution before
-public distribution. The inventory flags these gaps, and publication checks fail
-until they are resolved. The newer objc2 scope documents cover nine additional packages but contain no
+The upstream `block` and `dispatch` repositories contain no standalone license
+file in their available histories. The `malloc_buf` repository first added
+[LICENSE](https://github.com/SSheldon/malloc_buf/blob/d9a3e539642bd90e07df458d226b19cdfa606863/LICENSE)
+in 2020, after version 0.0.6 and intervening source changes. The `hexf`
+repository added a [0BSD license text](https://github.com/lifthrasiir/hexf/blob/41f0018229c1ee3d6fd813b6808d1ad1f506554c/LICENSE)
+in 2023, after version 0.2.1; it is a different declaration. Neither later
+file has been assigned to these old crate versions. The declared license
+expressions and authors are metadata, not substitutes for the missing notices.
+Obtain version-applicable authoritative texts or an independently reviewed
+resolution before public distribution. The inventory correctly flags all four
+gaps, and publication checks fail until they are resolved.
+
+The newer objc2 scope documents cover nine additional packages but contain no
 complete license permission body or copyright notice: block2 0.6.2, dispatch2
 0.3.1, objc2 0.6.5, objc2-encode 4.1.0, objc2-foundation 0.3.2, objc2-app-kit
 0.3.2, objc2-core-foundation 0.3.2, objc2-core-graphics 0.3.2 and objc2-io-surface
