@@ -3,7 +3,7 @@ name: release-builds
 on:
   workflow_dispatch:
   push:
-    branches: ['ci/**', 'feat/**', 'chore/release-licensing']
+    branches: ['ci/**', 'feat/**', 'chore/**']
     tags: ['v*']
 
 permissions:
