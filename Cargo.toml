@@ -2,7 +2,7 @@
 name = "pdf-squeeze"
 version = "0.1.0"
 edition = "2021"
-description = "Compress PDFs to a target size using Ghostscript"
+description = "Desktop and CLI PDF compression using Ghostscript"
 license = "MIT"
 
 [dependencies]

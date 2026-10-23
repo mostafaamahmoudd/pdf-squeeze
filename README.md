@@ -1,12 +1,35 @@
 # PDF Squeeze
 
-`pdf-squeeze` is a small cross-platform desktop tool for reducing one PDF with a single Ghostscript conversion using `-dPDFSETTINGS=/ebook`. The GUI and CLI use the same compression engine. The Rust wrapper reads only small validation buffers and file metadata; Ghostscript handles PDF processing and its memory requirements depend on the document.
+<img src="assets/icons/pdf-squeeze-icon.png" alt="PDF Squeeze app icon" width="96">
 
-PDF Squeeze validates the candidate before comparing its size with the input. If the candidate is smaller, it is saved. Otherwise, an unchanged copy of the original is saved. There is no automatic second pass or DPI search. The `/ebook` profile can change image quality and other PDF properties; it does not guarantee a particular file size or a resolution for all PDF content. Already optimized or mostly vector documents may not shrink.
+PDF Squeeze is a desktop app and command-line tool for making one PDF smaller. It runs one Ghostscript conversion with the `/ebook` profile. The GUI and CLI share the same compression engine. Ghostscript is installed separately; it is not bundled with the app.
+
+## Features
+
+- Choose input and output files in the desktop window, or pass paths on the command line.
+- Run one compression pass in a background worker so the desktop window stays responsive.
+- Validate the result before saving it. If it is not smaller, save an unchanged copy of the original.
+- Report original and output sizes, savings, elapsed time, and the profile used.
+- Protect the input and refuse to replace an existing output file.
+
+In one real-world Windows test, an **80 MB PDF became 17 MB**. That is one example, not a size or quality guarantee: results depend on the PDF, and the `/ebook` profile can change image quality and other properties. Already optimized or mostly vector PDFs may not shrink.
+
+## Downloads
+
+Once v0.1.0 is approved and published, get the archive for your computer from [GitHub Releases](https://github.com/mostafaamahmoudd/rust-pdf-compressor/releases):
+
+| Platform | Archive | Included app |
+| --- | --- | --- |
+| Windows x64 | `pdf-squeeze-windows-x64.zip` | `pdf-squeeze.exe` |
+| Linux x64 | `pdf-squeeze-linux-x64.tar.gz` | `pdf-squeeze` and desktop launcher assets |
+| macOS Apple Silicon | `pdf-squeeze-macos-arm64.zip` | `PDF Squeeze.app` |
+| macOS Intel | `pdf-squeeze-macos-x64.zip` | `PDF Squeeze.app` |
+
+Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](docs/release-readiness.md).
 
 ## Install Ghostscript
 
-Ghostscript must be available on `PATH` as `gs` on macOS/Linux or `gswin64c` on Windows. Restart PDF Squeeze after installing it.
+On Linux, Ghostscript must be available as `gs` on `PATH`; on Windows, as `gswin64c` on `PATH`. On macOS, PDF Squeeze also checks the common Homebrew locations `/opt/homebrew/bin/gs` and `/usr/local/bin/gs` when `PATH` does not contain `gs`. Restart PDF Squeeze after installing it.
 
 | OS | Command |
 | --- | --- |
@@ -16,108 +39,28 @@ Ghostscript must be available on `PATH` as `gs` on macOS/Linux or `gswin64c` on 
 
 Ghostscript is installed separately and is not included in any release archive. Check its availability with `gs --version` on Linux/macOS or `gswin64c --version` on Windows. Its [AGPL and commercial licensing options](https://ghostscript.com/licensing/) need review for the intended distribution; launching an external process does not by itself settle those obligations.
 
-## Release packages
+## Install and use
 
-Planned GitHub Releases will provide `pdf-squeeze-windows-x64.zip`, `pdf-squeeze-linux-x64.tar.gz`, `pdf-squeeze-macos-arm64.zip`, and `pdf-squeeze-macos-x64.zip`, plus `SHA256SUMS.txt`. Each package includes an `INSTALL.md` with platform-specific instructions, `THIRD_PARTY_NOTICES.md`, `LICENSING.md`, and supporting upstream notices under `third_party/`. No public release has been published; licensing review remains open. See [licensing evidence and outstanding questions](LICENSING.md) before distributing a build. Linux builds use Ubuntu 22.04 and are not guaranteed to work on every distribution. macOS bundles are experimental and are not Developer ID signed or notarized; Gatekeeper may block them.
+Extract the archive and follow its `INSTALL.md`: [Windows](packaging/INSTALL-WINDOWS.md), [Linux](packaging/INSTALL-LINUX.md), or [macOS](packaging/INSTALL-MACOS.md). Install Ghostscript first, then restart PDF Squeeze. Launch the app without arguments to open the GUI. Pick an input PDF, choose an output path, and click **Compress**.
 
-The application icon comes from `assets/icons/pdf-squeeze-icon.png`. Generated Windows, Linux, and macOS icon files are checked in; contributors can regenerate them with `python3 scripts/generate_icons.py` after installing Pillow. The Linux archive includes a desktop entry and icon sizes for manual installation.
+The application icon comes from [`assets/icons/pdf-squeeze-icon.png`](assets/icons/pdf-squeeze-icon.png). Windows, Linux, and macOS icon assets are checked in.
 
-On Linux, building the native GUI may also require:
+## Build from source
 
-```sh
-sudo apt install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
-```
-
-### Windows Quick Start (pre-built binary)
-
-1. Install Ghostscript from https://ghostscript.com/releases/gsdnld.html (choose the 64-bit Windows installer).
-2. Unzip the `pdf-squeeze` folder to a location of your choice.
-3. Double-click `pdf-squeeze.exe`. The GUI opens with no arguments.
-4. Select a PDF, pick an output path, and click Compress.
-
-If the app shows a warning that Ghostscript was not found, re-run the Ghostscript installer and make sure the "Add to PATH" option is selected. Then restart the app.
-
-## Building from Source
-
-### Ubuntu 24.04 (Linux)
-
-```bash
-# Install build tools and GUI system dependencies
-sudo apt update
-sudo apt install -y build-essential libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev zenity
-
-# Install Rust via rustup
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Activate the environment
-source "$HOME/.cargo/env"
-```
-
-`eframe` requires the `libxcb-*` and `libxkbcommon-dev` packages on Linux. `rfd` uses the XDG desktop portal by default; a portal backend and Zenity should be installed for reliable file dialogs.
-
-### macOS
-
-```bash
-# Install Xcode Command Line Tools if not already present
-xcode-select --install
-
-# Install Rust via rustup
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Activate the environment
-source "$HOME/.cargo/env"
-```
-
-Ghostscript can be installed via `brew install ghostscript`.
-
-### Windows
-
-```powershell
-# Install Rust via winget (recommended by Microsoft)
-winget install Rustlang.Rustup
-```
-
-Windows requires the **Microsoft C++ Build Tools** with the "Desktop development with C++" workload (the Community edition is free for individuals); alternatively, download and run `rustup-init.exe` from https://rust-lang.org/tools/install, and if `cargo` is not found after installation, restart the terminal or verify that `%USERPROFILE%\.cargo\bin` is on PATH.
-
-### Building a Windows binary from Linux (best effort)
-
-If you are on Linux and want to produce a Windows `.exe` without a Windows machine:
-
-```bash
-rustup target add x86_64-pc-windows-gnu
-sudo apt install -y mingw-w64
-cargo build --release --target x86_64-pc-windows-gnu
-```
-
-The binary will be at `target/x86_64-pc-windows-gnu/release/pdf-squeeze.exe`.
-
-**Caveat:** `eframe` and GUI dependencies may fail to cross-compile cleanly from Linux to Windows depending on the toolchain and crate versions. If this build fails, build on a real Windows machine or a Windows VM instead. Cross-compilation is not the supported path for releases.
-
-### Verification (all OS)
-
-```bash
-cargo --version
-rustc --version
-```
-
-### Build and run
-
-```bash
-cargo build --release
-cargo run --release
-```
-
-The release binary will be at `target/release/pdf-squeeze` (Linux/macOS) or `target\release\pdf-squeeze.exe` (Windows).
-
-## Build
-
-Install Rust with Cargo, then run:
+Install Rust and Cargo, Ghostscript, and your platform's native build tools. On Ubuntu or Debian, the GUI needs X11/Wayland development libraries and a file-dialog backend:
 
 ```sh
-cargo build --release
+sudo apt install build-essential libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev zenity
 ```
 
-The executable is `target/release/pdf-squeeze` (or `target/release/pdf-squeeze.exe` on Windows).
+On macOS, install Xcode Command Line Tools. On Windows, install the Microsoft C++ Build Tools with the Desktop development workload. Build and launch locally with:
+
+```sh
+cargo build --release --locked
+cargo run --release --locked
+```
+
+The executable is `target/release/pdf-squeeze` on Linux/macOS or `target\release\pdf-squeeze.exe` on Windows. Official release archives are built on their native platforms.
 
 ## GUI
 
@@ -136,16 +79,24 @@ Without `-o`, the output is `<input_stem>_squeezed.pdf` beside the input. The CL
 
 PDF Squeeze will not replace an existing output file. Choose a new output path if the suggested name already exists.
 
+## Limitations and licensing
+
+- The `/ebook` profile can change image quality and other PDF properties. Check the output before relying on it.
+- Linux archives are built on Ubuntu 22.04; compatibility with other distributions is not guaranteed.
+- macOS bundles are currently unsigned and not notarized, so Gatekeeper may block them.
+- Ghostscript must be installed separately. Its AGPL/commercial licensing implications for this distribution still require review.
+- The owner approved the [MIT License](LICENSE) for original application source and documentation and approved distributing the icon separately. Third-party assets retain their own terms. Thirteen dependency inventory gaps and Ghostscript licensing still require review; see [LICENSING.md](LICENSING.md).
+
 ## Tests
 
 ```sh
-cargo test
+cargo test --locked
 cargo fmt --check
-cargo clippy -- -D warnings
+cargo clippy --locked --all-targets -- -D warnings
 ```
 
 The ignored GUI-worker and integration tests use small temporary PDFs and require Ghostscript installed:
 
 ```sh
-cargo test -- --ignored
+cargo test --locked -- --ignored
 ```

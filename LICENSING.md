@@ -4,14 +4,17 @@ This document records engineering evidence for release review. It does not make 
 legal determination, select a license on behalf of an upstream author, or certify
 that a binary distribution satisfies every obligation.
 
-## Project license — owner decision required
+## Project license — owner-approved scope
 
-Cargo.toml declares MIT. There is no verified root LICENSE file. The owner must
-confirm the copyright holder, intended licensing scope and approved license text.
-No project copyright statement or license grant has been created by this work.
-Third-party notices do not license pdf-squeeze itself. The release workflow still
-refuses publication without a nonempty root LICENSE; file presence is not proof
-of ownership or approval.
+The owner confirmed **Mostafa Mahmoud, 2026** as the copyright line and approved
+the standard [MIT License](LICENSE) for original pdf-squeeze application source
+code, including its Rust implementation, GUI, CLI, build scripts and original
+project documentation, to the extent the owner holds those rights. `Cargo.toml`
+declares MIT. Third-party dependencies and assets retain their own terms. The
+application icon has separate provenance and distribution approval below; the
+MIT declaration does not automatically classify the artwork. The release
+workflow still requires a nonempty root LICENSE and independently checks the
+third-party inventory before publication.
 
 ## Locked Rust dependency inventory
 
@@ -150,7 +153,8 @@ Current coverage is 429 crates, 666 preserved crate notice files, 55 supplementa
 upstream files and 726 licensing files per archive. The pointer evidence for
 wgpu-hal is resolved; the same 13 previously documented component gaps remain.
 This resolution is engineering evidence and does not establish full compliance,
-project ownership, icon rights, Ghostscript compatibility or Apple SDK rights.
+Ghostscript compatibility or Apple SDK rights. Project source licensing and
+icon distribution approval are recorded separately above and below.
 
 ## Embedded fonts and other resources
 
@@ -178,15 +182,16 @@ release documentation. Upstream font conditions remain distinct from Rust code
 licenses. The eframe default image and other resource candidates are recorded
 conservatively even where the application supplies its own branded icon.
 
-## Application icon — rights confirmation required
+## Application icon — approved for distribution
 
-The project owner reports that the selected icon was generated during development
-with ChatGPT and then selected by the owner. This is a provenance report, not an
-ownership declaration. The source image is assets/icons/pdf-squeeze-icon.png;
-scripts/generate_icons.py derives the platform icons from it. No grant of rights,
-MIT classification, exclusivity claim or copyright holder is asserted here.
-The owner must confirm the generation provenance, applicable service terms and
-intended distribution rights before release. Existing branding is unchanged.
+The project owner confirmed that the selected blue-and-red PDF compression-press
+icon was generated using ChatGPT for this project and approved distribution of
+the source image and its derived Windows, Linux and macOS assets with
+pdf-squeeze. The source image is assets/icons/pdf-squeeze-icon.png;
+scripts/generate_icons.py derives the platform icons from it. This approval is
+specific to distribution with the application. It does not assert exclusive
+rights, assign a copyright holder to the artwork, or automatically apply the
+project MIT License to the icon.
 
 ## Ghostscript — separate legal review required
 
@@ -226,12 +231,13 @@ No extra Python package or license-inventory service is needed.
    refuses missing, empty or hash-mismatched notices and a changed lockfile.
 7. `python3 scripts/verify_licenses.py --require-publishable` additionally requires
    a nonempty project LICENSE and zero recorded inventory issues. It currently
-   fails intentionally. `license_inventory.py --check --require-complete` checks
+   fails intentionally on the 13 unresolved inventory issues.
+   `license_inventory.py --check --require-complete` checks
    generated coverage independently. Neither flag is a legal approval mechanism.
 
 All four native CI jobs regenerate and compare the inventory, run packaging tests
 and verify archive notice bytes. The publication job retains the root LICENSE
 guard, checks unresolved inventory issues, and rechecks documentation in all four
-archives before checksums and publication. It cannot validate owner approval,
-icon rights, Ghostscript obligations, or unrecorded third-party requirements.
-Those remain human release-review responsibilities.
+archives before checksums and publication. It cannot independently validate
+the recorded owner approval, Ghostscript obligations, or unrecorded
+third-party requirements. Those remain human release-review responsibilities.
