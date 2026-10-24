@@ -25,7 +25,7 @@ Once v0.1.0 is approved and published, get the archive for your computer from [G
 | macOS Apple Silicon | `pdf-squeeze-macos-arm64.zip` | `PDF Squeeze.app` |
 | macOS Intel | `pdf-squeeze-macos-x64.zip` | `PDF Squeeze.app` |
 
-Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](docs/release-readiness.md).
+Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/docs/release-readiness.md).
 
 ## Install Ghostscript
 
@@ -41,9 +41,9 @@ Ghostscript is installed separately and is not included in any release archive. 
 
 ## Install and use
 
-Extract the archive and follow its `INSTALL.md`: [Windows](packaging/INSTALL-WINDOWS.md), [Linux](packaging/INSTALL-LINUX.md), or [macOS](packaging/INSTALL-MACOS.md). Install Ghostscript first, then restart PDF Squeeze. Launch the app without arguments to open the GUI. Pick an input PDF, choose an output path, and click **Compress**.
+Extract the archive and follow its `INSTALL.md`: [Windows](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-WINDOWS.md), [Linux](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-LINUX.md), or [macOS](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-MACOS.md). Install Ghostscript first, then restart PDF Squeeze. Launch the app without arguments to open the GUI. Pick an input PDF, choose an output path, and click **Compress**.
 
-The application icon comes from [`assets/icons/pdf-squeeze-icon.png`](assets/icons/pdf-squeeze-icon.png). Windows, Linux, and macOS icon assets are checked in.
+The application icon comes from [`assets/icons/pdf-squeeze-icon.png`](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/assets/icons/pdf-squeeze-icon.png). Windows, Linux, and macOS icon assets are checked in.
 
 ## Build from source
 
