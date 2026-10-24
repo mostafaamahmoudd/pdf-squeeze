@@ -112,16 +112,18 @@ class ReleasePackageTests(unittest.TestCase):
                 if archive.name.endswith(".zip"):
                     with zipfile.ZipFile(archive) as package:
                         members = set(package.namelist())
+                        self.assertIn("CONTRIBUTING.md", members)
                         documents = {name: package.read(name).decode("utf-8")
-                                     for name in ("README.md", "INSTALL.md")}
+                                     for name in ("README.md", "INSTALL.md", "CONTRIBUTING.md")}
                         self.assertIn("assets/icons/pdf-squeeze-icon.png", members)
                         self.assertEqual(package.read("assets/icons/pdf-squeeze-icon.png"),
                                          (repo / "assets/icons/pdf-squeeze-icon.png").read_bytes())
                 else:
                     with tarfile.open(archive, "r:gz") as package:
                         members = set(package.getnames())
+                        self.assertIn("CONTRIBUTING.md", members)
                         documents = {name: package.extractfile(name).read().decode("utf-8")
-                                     for name in ("README.md", "INSTALL.md")}
+                                     for name in ("README.md", "INSTALL.md", "CONTRIBUTING.md")}
                         self.assertIn("assets/icons/pdf-squeeze-icon.png", members)
                         self.assertEqual(package.extractfile("assets/icons/pdf-squeeze-icon.png").read(),
                                          (repo / "assets/icons/pdf-squeeze-icon.png").read_bytes())
@@ -154,6 +156,7 @@ class ReleasePackageTests(unittest.TestCase):
         self.binary.write_bytes(b"test executable")
         (self.root / "README.md").write_text(
             '# Project README\n<img src="assets/icons/pdf-squeeze-icon.png" alt="PDF Squeeze">\n')
+        (self.root / "CONTRIBUTING.md").write_text("Contributor guide. See [README](README.md).\n")
         (self.root / "Cargo.lock").write_bytes(b"lock fixture\n")
         (self.root / "THIRD_PARTY_NOTICES.md").write_text("Third-party notices\n")
         (self.root / "LICENSING.md").write_text("Unresolved project and asset rights\n")
@@ -192,7 +195,7 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(archive.name, "pdf-squeeze-windows-x64.zip")
         with zipfile.ZipFile(archive) as package:
             self.assertEqual(set(package.namelist()),
-                             {"pdf-squeeze.exe", "pdf-squeeze.ico", "README.md", "INSTALL.md",
+                             {"pdf-squeeze.exe", "pdf-squeeze.ico", "README.md", "INSTALL.md", "CONTRIBUTING.md",
                               "assets/icons/pdf-squeeze-icon.png"} | self.license_paths)
             for name in self.license_paths:
                 self.assertTrue(package.read(name).strip())
@@ -203,7 +206,7 @@ class ReleasePackageTests(unittest.TestCase):
         archive = build_package("linux-x64", self.binary, self.root / "dist", "0.1.0", self.root)
         self.assertEqual(archive.name, "pdf-squeeze-linux-x64.tar.gz")
         with tarfile.open(archive, "r:gz") as package:
-            expected = {"pdf-squeeze", "README.md", "INSTALL.md",
+            expected = {"pdf-squeeze", "README.md", "INSTALL.md", "CONTRIBUTING.md",
                         "assets/icons/pdf-squeeze-icon.png",
                         "share/applications/pdf-squeeze.desktop"}
             expected.update(f"share/icons/hicolor/{size}x{size}/apps/pdf-squeeze.png"
@@ -227,7 +230,7 @@ class ReleasePackageTests(unittest.TestCase):
                     plist = "PDF Squeeze.app/Contents/Info.plist"
                     icon = "PDF Squeeze.app/Contents/Resources/pdf-squeeze.icns"
                     self.assertEqual(set(package.namelist()),
-                                     {executable, plist, icon, "README.md", "INSTALL.md",
+                                     {executable, plist, icon, "README.md", "INSTALL.md", "CONTRIBUTING.md",
                                       "assets/icons/pdf-squeeze-icon.png"} | self.license_paths)
                     for name in self.license_paths:
                         self.assertTrue(package.read(name).strip())
