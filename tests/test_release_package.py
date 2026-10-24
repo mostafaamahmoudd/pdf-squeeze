@@ -2,18 +2,48 @@ import configparser
 import hashlib
 import json
 import plistlib
+import posixpath
+import re
 import stat
 import tarfile
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
-from scripts.package_release import build_package
+from scripts.package_release import PLATFORMS, build_package
 from scripts.verify_licenses import license_files, verify_archive
 
 
 class ReleasePackageTests(unittest.TestCase):
+    def test_shipped_readme_and_install_links_resolve_in_every_layout(self):
+        repo = Path(__file__).resolve().parent.parent
+        for platform in PLATFORMS:
+            with self.subTest(platform=platform):
+                archive = build_package(platform, self.binary, self.root / "dist", "0.1.0", repo)
+                verify_archive(repo, archive)
+                if archive.name.endswith(".zip"):
+                    with zipfile.ZipFile(archive) as package:
+                        members = set(package.namelist())
+                        documents = {name: package.read(name).decode("utf-8")
+                                     for name in ("README.md", "INSTALL.md")}
+                else:
+                    with tarfile.open(archive, "r:gz") as package:
+                        members = set(package.getnames())
+                        documents = {name: package.extractfile(name).read().decode("utf-8")
+                                     for name in ("README.md", "INSTALL.md")}
+                for name, document in documents.items():
+                    # Cover Markdown links/images and the README's HTML icon.
+                    links = re.findall(r'!?\[[^\]]*\]\(([^)]+)\)|\bsrc="([^"]+)"', document)
+                    for markdown, html in links:
+                        link = urlsplit(markdown or html)
+                        if link.scheme or link.netloc or not link.path:
+                            continue
+                        target = posixpath.normpath(posixpath.join(
+                            posixpath.dirname(name), unquote(link.path)))
+                        self.assertTrue(target in members, f"Broken link in {platform}/{name}: {target}")
+
     def test_desktop_launcher_opens_gui_without_claiming_pdf_files(self):
         desktop = configparser.ConfigParser(interpolation=None)
         desktop.read(Path(__file__).resolve().parent.parent / "packaging" / "pdf-squeeze.desktop")
