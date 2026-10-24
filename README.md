@@ -1,6 +1,6 @@
 # PDF Squeeze
 
-<img src="https://raw.githubusercontent.com/mostafaamahmoudd/rust-pdf-compressor/master/assets/icons/pdf-squeeze-icon.png" alt="PDF Squeeze app icon" width="96">
+<img src="assets/icons/pdf-squeeze-icon.png" alt="PDF Squeeze app icon" width="96">
 
 PDF Squeeze is a desktop app and command-line tool for making one PDF smaller. It runs one Ghostscript conversion with the `/ebook` profile. The GUI and CLI share the same compression engine. Ghostscript is installed separately; it is not bundled with the app.
 

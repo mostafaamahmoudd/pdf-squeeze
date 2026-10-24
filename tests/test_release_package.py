@@ -1,5 +1,6 @@
 import configparser
 import hashlib
+import io
 import json
 import plistlib
 import posixpath
@@ -13,10 +14,95 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from scripts.package_release import PLATFORMS, build_package
+from scripts import package_release
 from scripts.verify_licenses import license_files, verify_archive
 
 
 class ReleasePackageTests(unittest.TestCase):
+    def rewrite_archive(self, archive, replacements):
+        altered = self.root / ("altered-" + archive.name)
+        if archive.name.endswith(".zip"):
+            with zipfile.ZipFile(archive) as source, zipfile.ZipFile(altered, "w") as destination:
+                for info in source.infolist():
+                    data = replacements.get(info.filename, source.read(info.filename))
+                    if data is not None:
+                        destination.writestr(info, data)
+        else:
+            with tarfile.open(archive, "r:gz") as source, tarfile.open(altered, "w:gz") as destination:
+                for info in source.getmembers():
+                    data = replacements.get(info.name, source.extractfile(info).read())
+                    if data is not None:
+                        info.size = len(data)
+                        destination.addfile(info, io.BytesIO(data))
+        return altered
+
+    def test_archive_verification_rejects_missing_or_changed_selected_png(self):
+        icon = "assets/icons/pdf-squeeze-icon.png"
+        for platform in PLATFORMS:
+            archive = build_package(platform, self.binary, self.root / "dist", "0.1.0", self.root)
+            for replacement in (None, b"different artwork"):
+                with self.subTest(platform=platform, replacement=replacement):
+                    altered = self.rewrite_archive(archive, {icon: replacement})
+                    with self.assertRaisesRegex(ValueError, "Missing README image|differs"):
+                        package_release.verify_package_readme(self.root, altered)
+
+    def test_archive_verification_rejects_changed_readme_image_references(self):
+        original = (self.root / "README.md").read_text()
+        for platform in PLATFORMS:
+            archive = build_package(platform, self.binary, self.root / "dist", "0.1.0", self.root)
+            for document, error in (
+                ("# Missing selected image\n", "must reference"),
+                (original + '\n![missing](assets/icons/missing.png)', "Missing README image"),
+                (original + '\n<img src="../outside.png">', "Unsafe README image"),
+                (original + '\n<img src="https://raw.githubusercontent.com/mostafaamahmoudd/'
+                 'rust-pdf-compressor/master/icon.png">', "Repository README image"),
+            ):
+                with self.subTest(platform=platform, error=error):
+                    altered = self.rewrite_archive(archive, {"README.md": document.encode()})
+                    with self.assertRaisesRegex(ValueError, error):
+                        package_release.verify_package_readme(self.root, altered)
+
+    def test_packaging_rejects_missing_and_unsafe_readme_images(self):
+        original = (self.root / "README.md").read_text()
+        for reference, error in (
+            ("assets/icons/missing.png", "Missing README image"),
+            ("../outside.png", "Unsafe README image"),
+            ("%2e%2e/outside.png", "Unsafe README image"),
+            ("/outside.png", "Unsafe README image"),
+            (r"..\outside.png", "Unsafe README image"),
+            ("C:/outside.png", "Unsafe README image"),
+            ("file:///outside.png", "Unsafe README image"),
+            ("//outside/image.png", "Unsafe README image"),
+            ("https://raw.githubusercontent.com/mostafaamahmoudd/rust-pdf-compressor/master/icon.png",
+             "Repository README image"),
+            ("https://github.com/mostafaamahmoudd/rust-pdf-compressor/raw/master/icon.png",
+             "Repository README image"),
+        ):
+            for platform in PLATFORMS:
+                with self.subTest(reference=reference, platform=platform):
+                    (self.root / "README.md").write_text(original + f'\n<img src="{reference}">\n')
+                    with self.assertRaisesRegex(ValueError, error):
+                        build_package(platform, self.binary, self.root / "dist", "0.1.0", self.root)
+
+    def test_packaging_checks_markdown_and_single_quoted_html_images(self):
+        original = (self.root / "README.md").read_text()
+        for markup in ("![missing](assets/icons/missing.png)", "<IMG SRC='assets/icons/missing.png'>"):
+            with self.subTest(markup=markup):
+                (self.root / "README.md").write_text(original + "\n" + markup)
+                with self.assertRaisesRegex(ValueError, "Missing README image"):
+                    build_package("windows-x64", self.binary, self.root / "dist", "0.1.0", self.root)
+
+    def test_packaging_accepts_external_documentation_links(self):
+        with (self.root / "README.md").open("a") as readme:
+            readme.write('\n[Docs](https://example.com/docs)\n'
+                         '[Source image](https://raw.githubusercontent.com/mostafaamahmoudd/'
+                         'rust-pdf-compressor/master/assets/icons/pdf-squeeze-icon.png)\n'
+                         '![Selected icon](assets/icons/pdf-squeeze-icon.png)\n')
+        for platform in PLATFORMS:
+            with self.subTest(platform=platform):
+                archive = build_package(platform, self.binary, self.root / "dist", "0.1.0", self.root)
+                self.assertTrue(archive.is_file())
+
     def test_shipped_readme_and_install_links_resolve_in_every_layout(self):
         repo = Path(__file__).resolve().parent.parent
         for platform in PLATFORMS:
@@ -28,11 +114,18 @@ class ReleasePackageTests(unittest.TestCase):
                         members = set(package.namelist())
                         documents = {name: package.read(name).decode("utf-8")
                                      for name in ("README.md", "INSTALL.md")}
+                        self.assertIn("assets/icons/pdf-squeeze-icon.png", members)
+                        self.assertEqual(package.read("assets/icons/pdf-squeeze-icon.png"),
+                                         (repo / "assets/icons/pdf-squeeze-icon.png").read_bytes())
                 else:
                     with tarfile.open(archive, "r:gz") as package:
                         members = set(package.getnames())
                         documents = {name: package.extractfile(name).read().decode("utf-8")
                                      for name in ("README.md", "INSTALL.md")}
+                        self.assertIn("assets/icons/pdf-squeeze-icon.png", members)
+                        self.assertEqual(package.extractfile("assets/icons/pdf-squeeze-icon.png").read(),
+                                         (repo / "assets/icons/pdf-squeeze-icon.png").read_bytes())
+                self.assertIn('src="assets/icons/pdf-squeeze-icon.png"', documents["README.md"])
                 for name, document in documents.items():
                     # Cover Markdown links/images and the README's HTML icon.
                     links = re.findall(r'!?\[[^\]]*\]\(([^)]+)\)|\bsrc="([^"]+)"', document)
@@ -59,7 +152,8 @@ class ReleasePackageTests(unittest.TestCase):
         self.binary = self.root / "built" / "pdf-squeeze"
         self.binary.parent.mkdir()
         self.binary.write_bytes(b"test executable")
-        (self.root / "README.md").write_text("Project README\n")
+        (self.root / "README.md").write_text(
+            '# Project README\n<img src="assets/icons/pdf-squeeze-icon.png" alt="PDF Squeeze">\n')
         (self.root / "Cargo.lock").write_bytes(b"lock fixture\n")
         (self.root / "THIRD_PARTY_NOTICES.md").write_text("Third-party notices\n")
         (self.root / "LICENSING.md").write_text("Unresolved project and asset rights\n")
@@ -85,6 +179,7 @@ class ReleasePackageTests(unittest.TestCase):
         )
         icons = self.root / "assets" / "icons"
         icons.mkdir(parents=True)
+        (icons / "pdf-squeeze-icon.png").write_bytes(b"selected README icon")
         (icons / "pdf-squeeze.ico").write_bytes(b"windows icon")
         (icons / "pdf-squeeze.icns").write_bytes(b"macos icon")
         for size in (16, 32, 48, 64, 128, 256, 512):
@@ -97,7 +192,8 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(archive.name, "pdf-squeeze-windows-x64.zip")
         with zipfile.ZipFile(archive) as package:
             self.assertEqual(set(package.namelist()),
-                             {"pdf-squeeze.exe", "pdf-squeeze.ico", "README.md", "INSTALL.md"} | self.license_paths)
+                             {"pdf-squeeze.exe", "pdf-squeeze.ico", "README.md", "INSTALL.md",
+                              "assets/icons/pdf-squeeze-icon.png"} | self.license_paths)
             for name in self.license_paths:
                 self.assertTrue(package.read(name).strip())
             self.assertEqual(package.read("pdf-squeeze.exe"), b"test executable")
@@ -108,6 +204,7 @@ class ReleasePackageTests(unittest.TestCase):
         self.assertEqual(archive.name, "pdf-squeeze-linux-x64.tar.gz")
         with tarfile.open(archive, "r:gz") as package:
             expected = {"pdf-squeeze", "README.md", "INSTALL.md",
+                        "assets/icons/pdf-squeeze-icon.png",
                         "share/applications/pdf-squeeze.desktop"}
             expected.update(f"share/icons/hicolor/{size}x{size}/apps/pdf-squeeze.png"
                             for size in (16, 32, 48, 64, 128, 256, 512))
@@ -130,7 +227,8 @@ class ReleasePackageTests(unittest.TestCase):
                     plist = "PDF Squeeze.app/Contents/Info.plist"
                     icon = "PDF Squeeze.app/Contents/Resources/pdf-squeeze.icns"
                     self.assertEqual(set(package.namelist()),
-                                     {executable, plist, icon, "README.md", "INSTALL.md"} | self.license_paths)
+                                     {executable, plist, icon, "README.md", "INSTALL.md",
+                                      "assets/icons/pdf-squeeze-icon.png"} | self.license_paths)
                     for name in self.license_paths:
                         self.assertTrue(package.read(name).strip())
                     self.assertTrue(package.getinfo(executable).external_attr >> 16 & stat.S_IXUSR)

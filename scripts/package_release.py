@@ -1,14 +1,20 @@
 """Build the four release archives without bundling Ghostscript."""
 
 import argparse
+import html
 import json
 import plistlib
+import posixpath
+import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
+from html.parser import HTMLParser
+from urllib.parse import unquote, urlsplit
 
 
 if __package__:
@@ -25,6 +31,59 @@ PLATFORMS = {
 }
 
 
+class _ReadmeImages(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.references = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "img":
+            self.references.extend(value or "" for key, value in attrs if key == "src")
+
+
+def verify_package_readme(repo_root: Path, archive: Path) -> None:
+    """Check inline Markdown/HTML images without extracting files or using the network."""
+    is_zip = archive.name.endswith(".zip")
+    with (zipfile.ZipFile(archive) if is_zip else tarfile.open(archive, "r:gz")) as package:
+        if is_zip:
+            names = {info.filename for info in package.infolist()
+                     if not info.is_dir() and not stat.S_ISLNK(info.external_attr >> 16)}
+            read_file = package.read
+        else:
+            names = {info.name for info in package.getmembers() if info.isfile()}
+
+            def read_file(name):
+                return package.extractfile(name).read()
+
+        readme = read_file("README.md").decode("utf-8")
+        images = _ReadmeImages()
+        images.feed(readme)
+        references = images.references + re.findall(
+            r'!\[[^\]]*\]\(\s*<?([^\s)>]+)>?(?:\s+["\'][^"\']*["\'])?\s*\)', readme)
+        local_images = set()
+        for reference in references:
+            link = urlsplit(html.unescape(reference))
+            if link.scheme in {"http", "https"}:
+                if (link.hostname in {"github.com", "www.github.com", "raw.githubusercontent.com"}
+                        and link.path.lower().startswith("/mostafaamahmoudd/rust-pdf-compressor/")):
+                    raise ValueError(f"Repository README image must be packaged: {reference}")
+                continue
+            path = unquote(link.path)
+            target = posixpath.normpath(path)
+            if (link.scheme or link.netloc or not path or path.startswith("/")
+                    or "\\" in path or re.match(r"^[a-zA-Z]:", path)
+                    or target in {".", ".."} or target.startswith("../")):
+                raise ValueError(f"Unsafe README image path: {reference}")
+            if target not in names:
+                raise ValueError(f"Missing README image: {target}")
+            local_images.add(target)
+        selected = "assets/icons/pdf-squeeze-icon.png"
+        if selected not in local_images:
+            raise ValueError("README must reference the packaged selected icon")
+        if read_file(selected) != (repo_root / selected).read_bytes():
+            raise ValueError("Packaged README icon differs from the selected source asset")
+
+
 def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo_root: Path) -> Path:
     """Create one platform archive from the native release executable."""
     if platform not in PLATFORMS:
@@ -39,6 +98,9 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
     with tempfile.TemporaryDirectory() as temporary:
         stage = Path(temporary)
         shutil.copy2(repo_root / "README.md", stage / "README.md")
+        readme_icon = stage / "assets/icons/pdf-squeeze-icon.png"
+        readme_icon.parent.mkdir(parents=True)
+        shutil.copy2(repo_root / "assets/icons/pdf-squeeze-icon.png", readme_icon)
         shutil.copy2(repo_root / "packaging" / f"INSTALL-{install_platform}.md", stage / "INSTALL.md")
         for path in licensing:
             destination = stage / path
@@ -96,6 +158,7 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
                     info.mode = 0o755 if path == executable else 0o644
                     with path.open("rb") as source:
                         package.addfile(info, source)
+    verify_package_readme(repo_root, archive)
     return archive
 
 
