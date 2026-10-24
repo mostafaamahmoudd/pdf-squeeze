@@ -98,6 +98,7 @@ def build_package(platform: str, binary: Path, out_dir: Path, version: str, repo
     with tempfile.TemporaryDirectory() as temporary:
         stage = Path(temporary)
         shutil.copy2(repo_root / "README.md", stage / "README.md")
+        shutil.copy2(repo_root / "CONTRIBUTING.md", stage / "CONTRIBUTING.md")
         readme_icon = stage / "assets/icons/pdf-squeeze-icon.png"
         readme_icon.parent.mkdir(parents=True)
         shutil.copy2(repo_root / "assets/icons/pdf-squeeze-icon.png", readme_icon)

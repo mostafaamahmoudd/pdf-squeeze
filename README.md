@@ -16,7 +16,7 @@ In one real-world Windows test, an **80 MB PDF became 17 MB**. That is one examp
 
 ## Downloads
 
-Once v0.1.0 is approved and published, get the archive for your computer from [GitHub Releases](https://github.com/mostafaamahmoudd/rust-pdf-compressor/releases):
+Once v0.1.0 is approved and published, get the archive for your computer from [GitHub Releases](https://github.com/mostafaamahmoudd/pdf-squeeze/releases):
 
 | Platform | Archive | Included app |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Once v0.1.0 is approved and published, get the archive for your computer from [G
 | macOS Apple Silicon | `pdf-squeeze-macos-arm64.zip` | `PDF Squeeze.app` |
 | macOS Intel | `pdf-squeeze-macos-x64.zip` | `PDF Squeeze.app` |
 
-Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/docs/release-readiness.md).
+Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/release-readiness.md).
 
 ## Install Ghostscript
 
@@ -41,9 +41,9 @@ Ghostscript is installed separately and is not included in any release archive. 
 
 ## Install and use
 
-Extract the archive and follow its `INSTALL.md`: [Windows](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-WINDOWS.md), [Linux](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-LINUX.md), or [macOS](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/packaging/INSTALL-MACOS.md). Install Ghostscript first, then restart PDF Squeeze. Launch the app without arguments to open the GUI. Pick an input PDF, choose an output path, and click **Compress**.
+Extract the archive and follow its `INSTALL.md`: [Windows](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/packaging/INSTALL-WINDOWS.md), [Linux](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/packaging/INSTALL-LINUX.md), or [macOS](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/packaging/INSTALL-MACOS.md). Install Ghostscript first, then restart PDF Squeeze. Launch the app without arguments to open the GUI. Pick an input PDF, choose an output path, and click **Compress**.
 
-The application icon comes from [`assets/icons/pdf-squeeze-icon.png`](https://github.com/mostafaamahmoudd/rust-pdf-compressor/blob/master/assets/icons/pdf-squeeze-icon.png). Windows, Linux, and macOS icon assets are checked in.
+The application icon comes from [`assets/icons/pdf-squeeze-icon.png`](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/assets/icons/pdf-squeeze-icon.png). Windows, Linux, and macOS icon assets are checked in.
 
 ## Build from source
 
@@ -85,7 +85,12 @@ PDF Squeeze will not replace an existing output file. Choose a new output path i
 - Linux archives are built on Ubuntu 22.04; compatibility with other distributions is not guaranteed.
 - macOS bundles are currently unsigned and not notarized, so Gatekeeper may block them.
 - Ghostscript must be installed separately. Its AGPL/commercial licensing implications for this distribution still require review.
-- The owner approved the [MIT License](LICENSE) for original application source and documentation and approved distributing the icon separately. Third-party assets retain their own terms. Thirteen dependency inventory gaps and Ghostscript licensing still require review; see [LICENSING.md](LICENSING.md).
+
+PDF Squeeze is open source and released under the [MIT License](LICENSE) for its original application code and documentation.
+
+The application icon and third-party dependencies have their own licensing terms. See [LICENSING.md](LICENSING.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
+
+Some third-party licensing questions, including Ghostscript integration, are still being reviewed. The dependency inventory currently records 13 unresolved licensing entries.
 
 ## Tests
 
@@ -100,3 +105,14 @@ The ignored GUI-worker and integration tests use small temporary PDFs and requir
 ```sh
 cargo test --locked -- --ignored
 ```
+
+## Contributing
+
+Contributions are welcome: bug fixes, performance improvements, documentation, and better support across Windows, Linux, and macOS. Have an idea for a new feature? Start with a [GitHub Issue](https://github.com/mostafaamahmoudd/pdf-squeeze/issues) so we can discuss it together.
+
+1. Fork the repository and clone your fork.
+2. Create a branch for your change, such as `fix/describe-the-bug` or `docs/improve-setup`.
+3. Make your changes and run the [relevant checks](CONTRIBUTING.md#checks-before-a-pull-request).
+4. Submit a pull request explaining what changed, why, and how you tested it.
+
+Maintainers review pull requests before merging and may suggest changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, bug reports, and pull request guidance.
