@@ -1,5 +1,17 @@
 # v0.1.0 release readiness
 
+## Current Windows/Linux decision
+
+The [platform publication determination](platform-publication.md) supersedes the
+all-platform hold below for Windows x64 and Linux x64 only. Their exact
+normal/build trees contain none of the 13 unresolved records. The scoped gate
+must pass for each platform, both native CI jobs must pass, and public downloads
+must match the tag workflow's checksums. macOS remains blocked. All original
+records and historical reasoning below are preserved; none is erased or cleared.
+
+## Historical all-platform review (superseded only for Windows/Linux)
+
+
 This is a working review record, not permission to publish. The release workflow's
 project `LICENSE` and unresolved-inventory guards remain in force. Do not create
 a `v0.1.0` tag or publish a Release until the decisions below are closed and all

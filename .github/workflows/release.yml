@@ -23,14 +23,6 @@ jobs:
           - platform: linux-x64
             runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - platform: macos-arm64
-            runner: macos-latest
-            target: aarch64-apple-darwin
-            macho_arch: arm64
-          - platform: macos-x64
-            runner: macos-15-intel
-            target: x86_64-apple-darwin
-            macho_arch: x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -39,10 +31,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libdbus-1-dev ghostscript zenity desktop-file-utils
-
-      - name: Install macOS Ghostscript
-        if: runner.os == 'macOS'
-        run: brew install ghostscript
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -61,7 +49,7 @@ jobs:
       - name: Verify third-party licensing material
         run: |
           python3 scripts/license_inventory.py --check
-          python3 scripts/verify_licenses.py
+          python3 scripts/verify_licenses.py --require-publishable --platform '${{ matrix.platform }}'
 
       - name: Check formatting
         run: cargo fmt --check
@@ -88,7 +76,7 @@ jobs:
         run: python3 scripts/package_release.py --platform '${{ matrix.platform }}' --binary target/release/pdf-squeeze --out-dir release-dist
 
       - name: Verify archived licensing material
-        run: python3 scripts/verify_licenses.py --archive 'release-dist/pdf-squeeze-${{ matrix.platform }}.${{ matrix.platform == 'linux-x64' && 'tar.gz' || 'zip' }}'
+        run: python3 scripts/verify_licenses.py --require-publishable --platform '${{ matrix.platform }}' --archive 'release-dist/pdf-squeeze-${{ matrix.platform }}.tar.gz'
 
       - name: Verify Linux archive, dynamic libraries and CLI
         if: runner.os == 'Linux'
@@ -106,32 +94,9 @@ jobs:
           done
           file "$executable"
           ldd "$executable" | tee "$RUNNER_TEMP/pdf-squeeze-ldd.txt"
-          if grep -q 'not found' "$RUNNER_TEMP/pdf-squeeze-ldd.txt"; then exit 1; fi
+          if grep -Eq 'not found|libgs\.' "$RUNNER_TEMP/pdf-squeeze-ldd.txt"; then exit 1; fi
           "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
           cmp tests/fixtures/tiny.pdf "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
-
-      - name: Verify macOS app bundle and CLI
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p "$RUNNER_TEMP/pdf-squeeze-release-check"
-          unzip -q 'release-dist/pdf-squeeze-${{ matrix.platform }}.zip' -d "$RUNNER_TEMP/pdf-squeeze-release-check"
-          app="$RUNNER_TEMP/pdf-squeeze-release-check/PDF Squeeze.app"
-          executable="$app/Contents/MacOS/pdf-squeeze"
-          test -x "$executable"
-          test -f "$RUNNER_TEMP/pdf-squeeze-release-check/README.md"
-          test -f "$RUNNER_TEMP/pdf-squeeze-release-check/INSTALL.md"
-          plutil -lint "$app/Contents/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")" = 'pdf-squeeze'
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIconFile' "$app/Contents/Info.plist")" = 'pdf-squeeze.icns'
-          iconutil --convert iconset "$app/Contents/Resources/pdf-squeeze.icns" --output "$RUNNER_TEMP/pdf-squeeze-icon.iconset"
-          test -s "$RUNNER_TEMP/pdf-squeeze-icon.iconset/icon_16x16.png"
-          test -s "$RUNNER_TEMP/pdf-squeeze-icon.iconset/icon_512x512@2x.png"
-          test "$(lipo -archs "$executable")" = '${{ matrix.macho_arch }}'
-          otool -L "$executable"
-          "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
-          cmp tests/fixtures/tiny.pdf "$RUNNER_TEMP/pdf-squeeze-release-output.pdf"
-          env PATH=/usr/bin:/bin:/usr/sbin:/sbin "$executable" tests/fixtures/tiny.pdf --output "$RUNNER_TEMP/pdf-squeeze-finder-path-output.pdf"
-          cmp tests/fixtures/tiny.pdf "$RUNNER_TEMP/pdf-squeeze-finder-path-output.pdf"
 
       - name: Upload release archive
         uses: actions/upload-artifact@v4
@@ -157,6 +122,9 @@ jobs:
         with:
           toolchain: 1.89.0
 
+      - name: Fetch locked sources for platform publication verification
+        run: cargo fetch --locked
+
       - name: Validate release tag
         run: |
           version=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "pdf-squeeze"))')
@@ -165,7 +133,8 @@ jobs:
             echo 'A verified LICENSE file is required before publishing a Release' >&2
             exit 1
           fi
-          python3 scripts/verify_licenses.py --require-publishable
+          python3 scripts/verify_licenses.py --require-publishable --platform windows-x64
+          python3 scripts/verify_licenses.py --require-publishable --platform linux-x64
           git fetch origin master
           git merge-base --is-ancestor "$GITHUB_SHA" origin/master
 
@@ -178,19 +147,19 @@ jobs:
 
       - name: Verify publication license documentation in every archive
         run: |
-          python3 scripts/verify_licenses.py --require-publishable \
-            --archive release-dist/pdf-squeeze-windows-x64.zip \
-            --archive release-dist/pdf-squeeze-linux-x64.tar.gz \
-            --archive release-dist/pdf-squeeze-macos-arm64.zip \
-            --archive release-dist/pdf-squeeze-macos-x64.zip
+          python3 scripts/verify_licenses.py --require-publishable --platform windows-x64 \
+            --archive release-dist/pdf-squeeze-windows-x64.zip
+          python3 scripts/verify_licenses.py --require-publishable --platform linux-x64 \
+            --archive release-dist/pdf-squeeze-linux-x64.tar.gz
 
       - name: Verify archives and generate checksums
         run: |
           cd release-dist
-          for archive in pdf-squeeze-windows-x64.zip pdf-squeeze-linux-x64.tar.gz pdf-squeeze-macos-arm64.zip pdf-squeeze-macos-x64.zip; do
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 2
+          for archive in pdf-squeeze-windows-x64.zip pdf-squeeze-linux-x64.tar.gz; do
             test -s "$archive"
           done
-          sha256sum pdf-squeeze-windows-x64.zip pdf-squeeze-linux-x64.tar.gz pdf-squeeze-macos-arm64.zip pdf-squeeze-macos-x64.zip > SHA256SUMS.txt
+          sha256sum pdf-squeeze-windows-x64.zip pdf-squeeze-linux-x64.tar.gz > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
 
       - name: Generate release notes
@@ -211,9 +180,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             release-dist/pdf-squeeze-windows-x64.zip \
             release-dist/pdf-squeeze-linux-x64.tar.gz \
-            release-dist/pdf-squeeze-macos-arm64.zip \
-            release-dist/pdf-squeeze-macos-x64.zip \
             release-dist/SHA256SUMS.txt \
             --draft --verify-tag --title "PDF Squeeze $GITHUB_REF_NAME" --notes-file release-notes.md
-          test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets | length')" -eq 5
+          test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets | length')" -eq 3
           gh release edit "$GITHUB_REF_NAME" --draft=false
