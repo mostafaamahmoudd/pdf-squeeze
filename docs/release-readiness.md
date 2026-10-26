@@ -30,6 +30,56 @@ conservative inventory, its 13 unresolved issues, and the publication gate
 remain unchanged. Every planned archive carries the same inventory and notice
 superset.
 
+## 2026-10-26 licensing reassessment
+
+The 13 entries are evidence gaps, not 13 demonstrated license conflicts.
+Cargo's `license` field is a published SPDX license declaration, but it is not
+a substitute for accompanying license terms or any copyright notice supplied
+by a rights holder. The original inventory issues and collected notices remain
+intact. This review does not certify legal compliance.
+
+| Exact locked versions | Declaration and evidence gap | Default-feature applicability |
+| --- | --- | --- |
+| `block 0.1.6`, `dispatch 0.2.0`, `malloc_buf 0.0.6` | MIT declared; no version-applicable license or copyright text recovered | `dispatch` is active on both macOS targets; `block` and `malloc_buf` have no active path in the four reviewed target trees |
+| `hexf-parse 0.2.1` | CC0-1.0 declared; no version-applicable dedication text recovered | No active path in the four reviewed target trees |
+| `block2 0.6.2`, `dispatch2 0.3.1`, `objc2 0.6.5`, `objc2-app-kit 0.3.2`, `objc2-core-foundation 0.3.2`, `objc2-core-graphics 0.3.2`, `objc2-encode 4.1.0`, `objc2-foundation 0.3.2`, `objc2-io-surface 0.3.2` | MIT or an option including MIT declared; exact-revision upstream scope documents are preserved, but contain no complete permission text or copyright notice | All except `objc2-io-surface` are active on both macOS targets; `objc2-io-surface` has no active path in the four reviewed target trees |
+
+The exact versions, archive/source hashes, and upstream findings are recorded in
+[LICENSING.md](../LICENSING.md). No mandatory GPL-only or AGPL-only Rust crate
+expression was found in the locked inventory. Target dependency paths do not
+prove what code survived linking, so the archives retain the full notice
+superset. No missing copyright holder is inferred from a crate's author field.
+
+A proportionate publication policy can accept a version-specific upstream SPDX
+grant without an upstream copy of a standard license text **only when** the
+applicable canonical terms are included in every archive, all supplied
+copyright and attribution notices are preserved, and the evidence and selected
+license option are recorded for that exact version. It must still fail for an
+undeclared or incompatible grant, an unresolved notice pointer, a missing
+mandatory notice or permission term, or a substantiated distribution restriction.
+The [MIT and CC0 reference texts](../third_party/license-terms/README.md) are
+now included with packaging inputs, with pinned SPDX sources and SHA-256
+provenance. They do not invent missing upstream copyright notices or resolve
+the remaining legal questions.
+The existing `--require-publishable` check remains unchanged until those
+conditions have been implemented and verified. Missing historical files alone
+should not be silently converted into invented upstream notices.
+
+The separate Ghostscript question remains material. `src/gs.rs` starts an
+external `gs` or `gswin64c` process and the packaging script does not include
+Ghostscript. Users install it separately. [Artifex's FAQ](https://ghostscript.com/faq/)
+says an unchanged installation that is not redistributed can use the AGPL
+release, but it does not determine whether this particular MIT application
+must take AGPL terms or a commercial license. Written guidance for this
+integration is still needed before public binaries are authorized.
+
+The [exact-version objc2 licensing document](https://github.com/madsmtm/objc2/blob/objc2-0.6.5/LICENSE.md)
+states that some crates are derived from Apple SDKs and questions whether such
+derived works may be distributed. The [Xcode and Apple SDKs Agreement](https://www.apple.com/legal/sla/docs/xcode.pdf)
+allows distribution of qualifying macOS applications outside the App Store but
+does not by itself resolve that derived-code question. Obtain a review of the
+actual included code and rights before distributing the macOS binaries.
+
 The macOS paths run through several GUI and dialog dependencies, including
 `eframe`/`winit`, `glutin`, `arboard`, and `rfd`. Replacing one dialog crate
 would not remove all nine active gaps. No upgrade has been established as
