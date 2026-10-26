@@ -67,12 +67,16 @@ should not be silently converted into invented upstream notices.
 
 The separate Ghostscript question remains material. `src/gs.rs` starts an
 external `gs` or `gswin64c` process and the packaging script does not include
-Ghostscript. Users install it separately. [Artifex's FAQ](https://ghostscript.com/faq/)
-says an unchanged installation that is not redistributed can use the AGPL
-release, but it does not determine whether this particular MIT application
-must take AGPL terms or a commercial license. This review has not established
-the applicable distribution terms for this integration, so it does not yet
-authorize public binaries.
+Ghostscript. Users install it separately. The application exchanges only
+command-line options, input/output file paths, process status, and diagnostics
+with it. [Artifex's FAQ](https://ghostscript.com/faq/) says an unchanged
+installation that is not redistributed can use the AGPL release. The
+[GNU license FAQ](https://www.gnu.org/licenses/gpl-faq.en.html#MereAggregation)
+says command-line communication normally indicates separate programs, while
+the exchange's semantics can still matter. This supports treating the programs
+as separate works, but neither source gives a project-specific determination
+that this MIT application may be distributed without AGPL or commercial terms.
+This review does not yet authorize public binaries.
 
 The [exact-version objc2 licensing document](https://github.com/madsmtm/objc2/blob/objc2-0.6.5/LICENSE.md)
 states that some crates are derived from Apple SDKs and questions whether such
