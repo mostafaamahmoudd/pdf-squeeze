@@ -70,15 +70,17 @@ external `gs` or `gswin64c` process and the packaging script does not include
 Ghostscript. Users install it separately. [Artifex's FAQ](https://ghostscript.com/faq/)
 says an unchanged installation that is not redistributed can use the AGPL
 release, but it does not determine whether this particular MIT application
-must take AGPL terms or a commercial license. Written guidance for this
-integration is still needed before public binaries are authorized.
+must take AGPL terms or a commercial license. This review has not established
+the applicable distribution terms for this integration, so it does not yet
+authorize public binaries.
 
 The [exact-version objc2 licensing document](https://github.com/madsmtm/objc2/blob/objc2-0.6.5/LICENSE.md)
 states that some crates are derived from Apple SDKs and questions whether such
 derived works may be distributed. The [Xcode and Apple SDKs Agreement](https://www.apple.com/legal/sla/docs/xcode.pdf)
 allows distribution of qualifying macOS applications outside the App Store but
-does not by itself resolve that derived-code question. Obtain a review of the
-actual included code and rights before distributing the macOS binaries.
+does not by itself resolve that derived-code question. Whether the included
+generated bindings contain protected SDK expression that needs additional
+permission remains undetermined for the macOS binaries.
 
 The macOS paths run through several GUI and dialog dependencies, including
 `eframe`/`winit`, `glutin`, `arboard`, and `rfd`. Replacing one dialog crate
