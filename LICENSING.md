@@ -150,7 +150,11 @@ inventory. Publication rejects unresolved pointers even if their issue strings
 are accidentally removed. Test archives can retain accurately recorded gaps.
 
 Current coverage is 429 crates, 666 preserved crate notice files, 55 supplemental
-upstream files and 726 licensing files per archive. The pointer evidence for
+upstream files and 730 licensing files per archive. The archive also includes
+three [standard-term reference files](third_party/license-terms/README.md):
+MIT and CC0-1.0 texts from pinned SPDX License List Data and their provenance
+index. These are generic terms, not version-specific upstream notices or
+assertions about missing copyright holders. The pointer evidence for
 wgpu-hal is resolved; the same 13 previously documented component gaps remain.
 This resolution is engineering evidence and does not establish full compliance,
 Ghostscript compatibility or Apple SDK rights. Project source licensing and
