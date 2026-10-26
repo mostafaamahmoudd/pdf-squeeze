@@ -48,7 +48,9 @@ def publication_packages(root, platform, inventory):
             active.add(f'{name} {version}')
     expected_tree = scope['inspection_trees'].get(sys.platform)
     if roots != 1 or not active or expected_tree is None or active != set(expected_tree):
-        raise ValueError(f'Publication dependency tree changed: {platform} on {sys.platform}')
+        expected = set(expected_tree or [])
+        raise ValueError(f'Publication dependency tree changed: {platform} on {sys.platform}; '
+                         f'unexpected={sorted(active - expected)}; missing={sorted(expected - active)}')
     # A Linux inspection omits Windows-host build dependencies. They remain in
     # the reviewed native obligations scope, verified again on the native runner.
     if not active.issubset(scope['packages']):
