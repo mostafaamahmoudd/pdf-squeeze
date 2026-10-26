@@ -16,14 +16,16 @@ In one real-world Windows test, an **80 MB PDF became 17 MB**. That is one examp
 
 ## Downloads
 
-Once v0.1.0 is approved and published, get the archive for your computer from [GitHub Releases](https://github.com/mostafaamahmoudd/pdf-squeeze/releases):
+v0.1.0 publication is limited to Windows x64 and Linux x64. Get release archives from [GitHub Releases](https://github.com/mostafaamahmoudd/pdf-squeeze/releases):
 
 | Platform | Archive | Included app |
 | --- | --- | --- |
 | Windows x64 | `pdf-squeeze-windows-x64.zip` | `pdf-squeeze.exe` |
 | Linux x64 | `pdf-squeeze-linux-x64.tar.gz` | `pdf-squeeze` and desktop launcher assets |
-| macOS Apple Silicon | `pdf-squeeze-macos-arm64.zip` | `PDF Squeeze.app` |
-| macOS Intel | `pdf-squeeze-macos-x64.zip` | `PDF Squeeze.app` |
+
+macOS binary publication is on hold pending resolution of Apple SDK-derived
+binding and notice questions. macOS build and packaging code remains available
+for development; it is not distribution clearance.
 
 Each archive includes `INSTALL.md`, the project `LICENSE`, and third-party licensing documentation. Verify downloads against `SHA256SUMS.txt` from the same release. Current release-readiness decisions are tracked in [release review](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/release-readiness.md).
 
@@ -37,7 +39,7 @@ On Linux, Ghostscript must be available as `gs` on `PATH`; on Windows, as `gswin
 | Windows | `choco install ghostscript` |
 | Ubuntu/Debian Linux | `sudo apt install ghostscript` |
 
-Ghostscript is installed separately and is not included in any release archive. Check its availability with `gs --version` on Linux/macOS or `gswin64c --version` on Windows. Its [AGPL and commercial licensing options](https://ghostscript.com/licensing/) need review for the intended distribution; launching an external process does not by itself settle those obligations.
+Ghostscript is installed separately and is not included in any release archive. Check its availability with `gs --version` on Linux/macOS or `gswin64c --version` on Windows. See its [AGPL and commercial licensing options](https://ghostscript.com/licensing/) and our [application-only distribution assessment](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/platform-publication.md).
 
 ## Install and use
 
@@ -83,14 +85,16 @@ PDF Squeeze will not replace an existing output file. Choose a new output path i
 
 - The `/ebook` profile can change image quality and other PDF properties. Check the output before relying on it.
 - Linux archives are built on Ubuntu 22.04; compatibility with other distributions is not guaranteed.
-- macOS bundles are currently unsigned and not notarized, so Gatekeeper may block them.
-- Ghostscript must be installed separately. Its AGPL/commercial licensing implications for this distribution still require review.
+- macOS binaries are withheld while distribution rights remain unresolved.
+- Ghostscript must be installed separately under its own licensing terms. It is not bundled or linked.
 
 PDF Squeeze is open source and released under the [MIT License](LICENSE) for its original application code and documentation.
 
 The application icon and third-party dependencies have their own licensing terms. See [LICENSING.md](LICENSING.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
 
-Some third-party licensing questions, including Ghostscript integration, are still being reviewed. The dependency inventory currently records 13 unresolved licensing entries.
+The dependency inventory preserves 13 unresolved licensing entries. None is active
+in the reviewed Windows/Linux release trees. See the [scoped release determination](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/platform-publication.md)
+for applicable terms, Ghostscript assessment and remaining macOS questions.
 
 ## Tests
 

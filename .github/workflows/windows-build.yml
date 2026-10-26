@@ -41,6 +41,14 @@ jobs:
           toolchain: 1.89.0
           components: rustfmt, clippy
 
+      - name: Verify native Windows x64 MSVC target
+        shell: pwsh
+        run: |
+          $hostLine = rustc -vV | Select-String '^host: '
+          if ($hostLine.ToString() -ne 'host: x86_64-pc-windows-msvc') {
+            throw 'Release requires a native Windows x64 MSVC compiler'
+          }
+
       - name: Fetch all locked sources for license verification
         run: cargo fetch --locked
 
@@ -48,7 +56,7 @@ jobs:
         run: |
           python scripts/license_inventory.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/verify_licenses.py
+          python scripts/verify_licenses.py --require-publishable --platform windows-x64
 
       - name: Check formatting
         run: cargo fmt --check
@@ -95,7 +103,7 @@ jobs:
         run: python scripts/package_release.py --platform windows-x64 --binary target/release/pdf-squeeze.exe --out-dir release-dist
 
       - name: Verify archived licensing material
-        run: python scripts/verify_licenses.py --archive release-dist/pdf-squeeze-windows-x64.zip
+        run: python scripts/verify_licenses.py --require-publishable --platform windows-x64 --archive release-dist/pdf-squeeze-windows-x64.zip
 
       - name: Verify Windows archive and release executable
         shell: pwsh
@@ -132,6 +140,7 @@ jobs:
           exe = Path('target/release/pdf-squeeze.exe').read_bytes()
           pe_offset = struct.unpack_from('<I', exe, 0x3c)[0]
           assert exe[pe_offset:pe_offset + 4] == b'PE\0\0'
+          assert struct.unpack_from('<H', exe, pe_offset + 4)[0] == 0x8664, 'Expected x64 PE machine'
           subsystem = struct.unpack_from('<H', exe, pe_offset + 24 + 68)[0]
           assert subsystem == 2, f'Expected Windows GUI subsystem, got {subsystem}'
           print('Multi-resolution icon and Windows GUI subsystem verified')

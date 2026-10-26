@@ -9,3 +9,9 @@
 /LICENSING.md -text
 /LICENSE -text
 /Cargo.lock -text
+
+# Publication review hashes must survive Windows core.autocrlf checkouts.
+/Cargo.toml text eol=lf
+/src/gs.rs text eol=lf
+/build.rs text eol=lf
+/docs/platform-publication.md text eol=lf

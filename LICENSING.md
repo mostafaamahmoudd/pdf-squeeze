@@ -4,6 +4,20 @@ This document records engineering evidence for release review. It does not make 
 legal determination, select a license on behalf of an upstream author, or certify
 that a binary distribution satisfies every obligation.
 
+## Current platform publication policy
+
+Windows x64 and Linux x64 application-only archives are eligible under the
+[documented platform determination](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/platform-publication.md)
+and pinned `third_party/publication-policy.json`. The 13 unresolved records
+remain intact and none is active in the reviewed default-feature Windows/Linux
+trees. macOS publication is not approved. The strict global gate still fails;
+explicit scoped checks require no active issues, complete notices and unchanged
+review inputs and trees. Historical gaps described below remain evidence gaps
+for their affected components, rather than a blanket Windows/Linux hold.
+
+The Rust 1.89.0 standard library copyright index and original license texts are
+also included under `third_party/rust-1.89.0`, outside the Cargo crate inventory.
+
 ## Project license — owner-approved scope
 
 The owner confirmed **Mostafa Mahmoud, 2026** as the copyright line and approved
@@ -89,7 +103,8 @@ file has been assigned to these old crate versions. The declared license
 expressions and authors are metadata, not substitutes for the missing notices.
 Obtain version-applicable authoritative texts or an independently reviewed
 resolution before public distribution. The inventory correctly flags all four
-gaps, and publication checks fail until they are resolved.
+gaps. Global publication checks fail until they are resolved; scoped checks fail
+if any affected component becomes active in an approved tree.
 
 The newer objc2 scope documents cover nine additional packages but contain no
 complete license permission body or copyright notice: block2 0.6.2, dispatch2
@@ -197,15 +212,18 @@ specific to distribution with the application. It does not assert exclusive
 rights, assign a copyright holder to the artwork, or automatically apply the
 project MIT License to the icon.
 
-## Ghostscript — separate legal review required
+## Ghostscript — application-only distribution assessment
 
-Ghostscript remains an externally installed executable and is not included in
-any application archive. Its AGPL/commercial licensing implications for this
-application's integration and intended distribution remain unresolved. External
-subprocess execution is not an automatic compatibility guarantee. Review the
-actual integration and distribution model with appropriate authority and
-[Artifex's licensing guidance](https://ghostscript.com/faq/) before release.
-The crate inventory does not cover an end user's Ghostscript installation.
+Ghostscript is separately installed and is not conveyed in the application
+archives. The current ordinary CLI/PDF-file integration supports treating it as
+a separate program; no unmet Ghostscript distribution obligation was identified
+for the reviewed Windows/Linux application-only scope. This is a reasoned release
+assessment, not an automatic subprocess exemption or an Artifex assurance.
+The [platform determination](https://github.com/mostafaamahmoudd/pdf-squeeze/blob/master/docs/platform-publication.md)
+records the facts, authoritative AGPL/Artifex/FSF guidance, remaining uncertainty,
+and conditions requiring reassessment. Bundling, linking, modifying Ghostscript,
+private protocols or a network service require fresh review. The crate inventory
+does not cover an end user's separate Ghostscript installation.
 
 ## Reproduction and maintenance
 
@@ -235,13 +253,15 @@ No extra Python package or license-inventory service is needed.
    refuses missing, empty or hash-mismatched notices and a changed lockfile.
 7. `python3 scripts/verify_licenses.py --require-publishable` additionally requires
    a nonempty project LICENSE and zero recorded inventory issues. It currently
-   fails intentionally on the 13 unresolved inventory issues.
+   fails intentionally on the 13 unresolved inventory issues. Add
+   `--platform windows-x64` or `--platform linux-x64` for the reviewed, pinned
+   default-feature scope; this does not clear the global issues.
    `license_inventory.py --check --require-complete` checks
    generated coverage independently. Neither flag is a legal approval mechanism.
 
-All four native CI jobs regenerate and compare the inventory, run packaging tests
-and verify archive notice bytes. The publication job retains the root LICENSE
-guard, checks unresolved inventory issues, and rechecks documentation in all four
-archives before checksums and publication. It cannot independently validate
+The Windows and Linux native CI jobs regenerate and compare the inventory, run
+packaging tests and verify archive notice bytes. The publication job retains the
+root LICENSE guard, checks in-scope unresolved inventory issues, and rechecks
+documentation in both approved archives before checksums and publication. It cannot independently validate
 the recorded owner approval, Ghostscript obligations, or unrecorded
 third-party requirements. Those remain human release-review responsibilities.
