@@ -36,15 +36,18 @@ cargo tree --locked --offline --target x86_64-unknown-linux-gnu --edges normal,b
 
 These are the default-feature trees used by the native release builds, including
 build dependencies and procedural macros, excluding dev-only edges. The Linux-host Windows inspection has 144 unique third-party package versions.
-The native Windows build additionally uses winres 0.1.12 and toml 0.5.11, for
-146; Linux has 269, and the native union has 292. winres has its original MIT
-notice; toml offers MIT/Apache-2.0 with both original texts retained (MIT selected).
+The native Windows build additionally uses winres 0.1.12, toml 0.5.11,
+serde 1.0.229 and serde_core 1.0.229, for 148; Linux has 269, and the native union has 292. winres has its original MIT
+notice; toml offers MIT/Apache-2.0 and both serde crates offer MIT OR Apache-2.0,
+with all original texts retained (MIT selected). The native-only closure was
+observed in [Windows CI diagnostics](https://github.com/mostafaamahmoudd/pdf-squeeze/actions/runs/40398969092/job/121839417746);
+the corrected full snapshot must pass the native gate before release.
 [Cargo's host build-dependency rules](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#build-dependencies)
 mean cross-target trees can omit host-conditioned dependencies. The policy pins
 both Linux-host and native-Windows inspection trees, and always checks the full
 native obligations scope. Actual native Windows CI must match the native snapshot
 before publication. The Linux-host publish job rechecks the cross-host tree and
-all 146 native Windows packages' notice evidence; it does not infer native
+all 148 native Windows packages' notice evidence; it does not infer native
 completeness from the cross-host tree alone.
 The broader 429-package metadata inventory deliberately includes inactive and
 optional dependencies. Its conservative platform labels are not used to waive
